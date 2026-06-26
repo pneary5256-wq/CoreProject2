@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CoreProject2 | CSV Upload</title>
+    <meta
+      name="description"
+      content="Upload a CSV file, preview the parsed data, and inspect summary metrics."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">CoreProject2</p>
+          <h1>Upload a CSV and inspect it instantly.</h1>
+          <p class="lede">
+            Drop in report exports, validate the headers, and preview the first rows before you
+            process anything further.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div>
+            <p class="label">Supported</p>
+            <p class="value">CSV, TSV, and semicolon-delimited exports</p>
+          </div>
+          <div>
+            <p class="label">Parsing</p>
+            <p class="value">Quoted fields, escaped quotes, and multiline cells</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel upload-panel" aria-labelledby="upload-title">
+        <div class="panel-header">
+          <div>
+            <p class="panel-kicker">Step 1</p>
+            <h2 id="upload-title">Choose a file</h2>
+          </div>
+          <button id="clearButton" class="ghost-button" type="button" disabled>Clear</button>
+        </div>
+
+        <label class="dropzone" id="dropzone" for="csvInput">
+          <input id="csvInput" type="file" accept=".csv,text/csv" />
+          <div class="dropzone-copy">
+            <span class="dropzone-icon">+</span>
+            <strong>Drag and drop a CSV here</strong>
+            <span>or click to browse your files</span>
+          </div>
+        </label>
+
+        <div id="message" class="message" role="status" aria-live="polite">
+          No file selected yet.
+        </div>
+      </section>
+
+      <section class="panel metrics-panel" aria-labelledby="metrics-title">
+        <div class="panel-header">
+          <div>
+            <p class="panel-kicker">Step 2</p>
+            <h2 id="metrics-title">Preview and summary</h2>
+          </div>
+          <div id="fileMeta" class="file-meta">Waiting for upload</div>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric-card">
+            <span class="metric-label">Rows</span>
+            <strong id="rowCount">0</strong>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Columns</span>
+            <strong id="columnCount">0</strong>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Delimiter</span>
+            <strong id="delimiterLabel">-</strong>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Previewed</span>
+            <strong id="previewCount">0</strong>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" aria-label="CSV preview table">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody">
+              <tr>
+                <td class="empty-state">Upload a CSV to see the parsed data here.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p id="previewNote" class="preview-note"></p>
+      </section>
+    </main>
+  </body>
+</html>

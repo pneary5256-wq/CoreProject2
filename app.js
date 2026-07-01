@@ -138,6 +138,8 @@ function validateContent(headers, dataRows) {
     'Have you previously applied or studied with Leeds Beckett University?',
     'Have you spent any time in care?',
   ];
+  const getHeaderIndex = (headerName) => headers.findIndex((header) => header.toLowerCase() === headerName.toLowerCase());
+  const normalize = (value) => String(value ?? '').trim();
 
   // Sample validation - check first 100 rows
   const sampleSize = Math.min(100, dataRows.length);
@@ -147,30 +149,36 @@ function validateContent(headers, dataRows) {
     const row = dataRows[i];
     const rowNum = i + 2; // +2 because row 1 is headers, row 2 is first data row
 
-    // Validate DOB format
-    const dobIndex = headers.findIndex((h) => h.toLowerCase() === 'dob');
-    if (dobIndex !== -1 && row[dobIndex]) {
+    const dobIndex = getHeaderIndex('DOB');
+    if (dobIndex !== -1 && normalize(row[dobIndex])) {
       if (!isValidDate(row[dobIndex])) {
         errors.push(`Row ${rowNum}: DOB "${row[dobIndex]}" is not in a valid date format (expected DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD)`);
         invalidCount++;
       }
     }
 
-    // Validate Type field
-    const typeIndex = headers.findIndex((h) => h.toLowerCase() === 'type');
-    if (typeIndex !== -1 && row[typeIndex]) {
-      const validTypes = ['Completed', 'In progress', 'Not started'];
-      if (!validTypes.includes(row[typeIndex])) {
-        errors.push(`Row ${rowNum}: Type "${row[typeIndex]}" must be one of: ${validTypes.join(', ')}`);
+    const typeIndex = getHeaderIndex('Type');
+    if (typeIndex !== -1 && normalize(row[typeIndex])) {
+      if (normalize(row[typeIndex]).toLowerCase() !== 'user') {
+        errors.push(`Row ${rowNum}: Type "${row[typeIndex]}" must be "User"`);
+        invalidCount++;
+      }
+    }
+
+    const onboardingStatusIndex = getHeaderIndex('Onboarding status');
+    if (onboardingStatusIndex !== -1 && normalize(row[onboardingStatusIndex])) {
+      const status = normalize(row[onboardingStatusIndex]).toLowerCase();
+      if (!['completed', 'in progress'].includes(status)) {
+        errors.push(`Row ${rowNum}: Onboarding status "${row[onboardingStatusIndex]}" must be "Completed" or "In Progress"`);
         invalidCount++;
       }
     }
 
     // Validate Yes/No fields
     yesNoFields.forEach((field) => {
-      const fieldIndex = headers.findIndex((h) => h.toLowerCase() === field.toLowerCase());
-      if (fieldIndex !== -1 && row[fieldIndex]) {
-        const value = row[fieldIndex].toLowerCase().trim();
+      const fieldIndex = getHeaderIndex(field);
+      if (fieldIndex !== -1 && normalize(row[fieldIndex])) {
+        const value = normalize(row[fieldIndex]).toLowerCase();
         if (!['yes', 'no', 'y', 'n'].includes(value)) {
           errors.push(`Row ${rowNum}: "${field}" value "${row[fieldIndex]}" must be "Yes" or "No"`);
           invalidCount++;
@@ -178,12 +186,13 @@ function validateContent(headers, dataRows) {
       }
     });
 
-    // Validate Weekly contracted hours is numeric
-    const hoursIndex = headers.findIndex((h) => h.toLowerCase() === 'weekly contracted hours');
-    if (hoursIndex !== -1 && row[hoursIndex]) {
-      const hours = parseFloat(row[hoursIndex]);
-      if (isNaN(hours) || hours < 0) {
-        errors.push(`Row ${rowNum}: Weekly contracted hours "${row[hoursIndex]}" must be a non-negative number`);
+    // This field is often populated with mixed free text such as "37.5 full time" or "37.5 - TBC".
+    // It is therefore treated as descriptive text rather than a strict numeric field.
+
+    const weeklyHoursIndex = getHeaderIndex('Weekly contracted hours');
+    if (weeklyHoursIndex !== -1 && normalize(row[weeklyHoursIndex])) {
+      if (!/^\d{1,2}:\d{2}$/.test(normalize(row[weeklyHoursIndex]))) {
+        errors.push(`Row ${rowNum}: Weekly contracted hours "${row[weeklyHoursIndex]}" must be in HH:MM format`);
         invalidCount++;
       }
     }
@@ -482,11 +491,41 @@ function shouldSkipDescriptionRow(headers, row) {
     return false;
   }
 
-  const comparedCells = padRow(row, headers.length);
-  const dataLikeCells = comparedCells.filter((cell) => looksLikeDataCell(cell));
-  const textLikeCells = comparedCells.filter((cell) => looksLikeDescriptionCell(cell));
+  const comparedCells = padRow(row, headers.length).map((cell) => String(cell).trim());
+  const markerPatterns = [
+    /will always be/i,
+    /either/i,
+    /populated by applicant/i,
+    /free field/i,
+    /blank if not/i,
+    /number in format/i,
+    /yes\/no/i,
+    /if uk then/i,
+    /fixed field/i,
+    /set fields/i,
+    /removed below data protection/i,
+    /student id/i,
+    /ni number/i,
+  ];
 
-  return dataLikeCells.length === 0 && textLikeCells.length >= Math.max(3, Math.ceil(headers.length * 0.4));
+  let markerHits = 0;
+  let dataLikeHits = 0;
+
+  comparedCells.forEach((cell) => {
+    if (!cell) {
+      return;
+    }
+
+    if (markerPatterns.some((pattern) => pattern.test(cell))) {
+      markerHits += 1;
+    }
+
+    if (looksLikeDataCell(cell)) {
+      dataLikeHits += 1;
+    }
+  });
+
+  return markerHits >= 3 || (markerHits >= 2 && dataLikeHits <= 5);
 }
 
 function looksLikeDataCell(value) {

@@ -19,6 +19,7 @@ let activeFile = null;
 // Validation constants
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_ROWS = 100000;
+const DATE_HEADERS = new Set(['DOB', 'Onboarding Deadline', 'Date of Birth']);
 const REQUIRED_HEADERS = [
   'Id',
   'Type',
@@ -152,7 +153,7 @@ function validateContent(headers, dataRows) {
     const dobIndex = getHeaderIndex('DOB');
     if (dobIndex !== -1 && normalize(row[dobIndex])) {
       if (!isValidDate(row[dobIndex])) {
-        errors.push(`Row ${rowNum}: DOB "${row[dobIndex]}" is not in a valid date format (expected DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD)`);
+        errors.push(`Row ${rowNum}: DOB "${row[dobIndex]}" is not in a valid date format (expected DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, MM/DD/YY, or YYYY-MM-DD)`);
         invalidCount++;
       }
     }
@@ -222,7 +223,7 @@ function isValidDate(dateString) {
     return !isNaN(date.getTime());
   }
 
-  // Check DD/MM/YYYY or MM/DD/YYYY format
+  // Check DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, or MM/DD/YY format
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(trimmed)) {
     const parts = trimmed.split('/');
     const day = parseInt(parts[0], 10);
@@ -234,7 +235,12 @@ function isValidDate(dateString) {
     }
 
     const date = new Date(year, month - 1, day);
-    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+    const dayMonthMatches = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+
+    const alternativeDate = new Date(year, day - 1, month);
+    const monthDayMatches = alternativeDate.getFullYear() === year && alternativeDate.getMonth() === day - 1 && alternativeDate.getDate() === month;
+
+    return dayMonthMatches || monthDayMatches;
   }
 
   return false;
@@ -277,7 +283,7 @@ async function processFile(file) {
     validateContent(headers, dataRows);
 
     const previewRows = dataRows.slice(0, previewLimit);
-    const normalizedRows = previewRows.map((row) => padRow(row, headers.length));
+    const normalizedRows = previewRows.map((row) => normalizePreviewRow(headers, row));
 
     rowCount.textContent = String(dataRows.length);
     columnCount.textContent = String(headers.length);
@@ -378,6 +384,99 @@ function resetView() {
   previewNote.textContent = '';
   setMessage('No file selected yet.');
   resetTable();
+}
+
+function normalizePreviewRow(headers, row) {
+  const paddedRow = padRow(row, headers.length);
+
+  return paddedRow.map((cell, index) => {
+    const header = headers[index] ?? '';
+
+    if (!DATE_HEADERS.has(header)) {
+      return cell;
+    }
+
+    return normalizeUkDate(cell);
+  });
+}
+
+function normalizeUkDate(value) {
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashMatch) {
+    const first = Number(slashMatch[1]);
+    const second = Number(slashMatch[2]);
+    const year = normalizeYearPart(slashMatch[3]);
+
+    if (year == null) {
+      return text;
+    }
+
+    const ukDate = buildUkDate(year, second, first);
+    if (ukDate) {
+      return ukDate;
+    }
+
+    const alternateDate = buildUkDate(year, first, second);
+    if (alternateDate) {
+      return alternateDate;
+    }
+  }
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const ukDate = buildUkDate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+    if (ukDate) {
+      return ukDate;
+    }
+  }
+
+  return text;
+}
+
+function normalizeYearPart(yearPart) {
+  const year = Number(yearPart);
+
+  if (Number.isNaN(year)) {
+    return null;
+  }
+
+  if (yearPart.length === 2) {
+    return year < 50 ? 2000 + year : 1900 + year;
+  }
+
+  return year;
+}
+
+function buildUkDate(year, month, day) {
+  const parsedYear = Number(year);
+  const parsedMonth = Number(month);
+  const parsedDay = Number(day);
+
+  if ([parsedYear, parsedMonth, parsedDay].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+
+  const date = new Date(parsedYear, parsedMonth - 1, parsedDay);
+
+  if (
+    date.getFullYear() !== parsedYear ||
+    date.getMonth() !== parsedMonth - 1 ||
+    date.getDate() !== parsedDay
+  ) {
+    return null;
+  }
+
+  const displayDay = String(parsedDay).padStart(2, '0');
+  const displayMonth = String(parsedMonth).padStart(2, '0');
+  const displayYear = String(parsedYear).padStart(4, '0');
+
+  return `${displayDay}/${displayMonth}/${displayYear}`;
 }
 
 function setMessage(text, isError = false) {

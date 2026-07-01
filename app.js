@@ -16,6 +16,55 @@ const clearButton = document.querySelector('#clearButton');
 const previewLimit = 200;
 let activeFile = null;
 
+// Validation constants
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_ROWS = 100000;
+const REQUIRED_HEADERS = [
+  'Id',
+  'Type',
+  'First name',
+  'Last name',
+  'DOB',
+  'Employer organisation',
+  'Job title',
+];
+const EXPECTED_HEADERS = new Set([
+  'Id',
+  'Type',
+  'Onboarding status',
+  'The apprenticeship we have been advised you are applying for is:',
+  'Onboarding Deadline',
+  'Employer organisation',
+  'First name',
+  'Last name',
+  'Current programme',
+  'Group level 4',
+  'DOB',
+  'Have you used a previous name?',
+  'Job title',
+  'What will be your contracted weekly working hours?',
+  'Weekly contracted hours',
+  'In employment, including self-employment',
+  'UK/EEA National',
+  'Will you undertake more than 50% of your apprenticeship role within England?',
+  'Country of residence',
+  'Nationality',
+  'Country of birth',
+  'Resident in the UK/EEA for 3 years',
+  'Requires a Work Permit',
+  'In the last 12 months, have you undertaken, or are you planning to undertake, any other government-funded training (excluding apprenticeships)',
+  'Details of evidence presented',
+  'Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?',
+  'Will you be paid (at least) the apprenticeship minimum wage for the duration of the apprenticeship?',
+  'Please list the full titles of the qualification(s) you will be using to meet the entry requirements of the apprenticeship, including their level and grade (e.g., Level 3 qualifications that hold UCAS points, a degree certificate).',
+  'If you hold any additional professional qualifications please list them here (e.g. role specific training, CPD).',
+  'Do you have a permanent contract?',
+  'Apart from the apprenticeship you are currently applying for right now, are you enrolled on any another apprenticeship?',
+  'Have you previously applied or studied with Leeds Beckett University?',
+  'If yes, please give your Leeds Beckett Student Number if known.',
+  'National insurance number',
+]);
+
 csvInput.addEventListener('change', handleSelection);
 dropzone.addEventListener('dragover', handleDragOver);
 dropzone.addEventListener('dragleave', handleDragLeave);
@@ -41,6 +90,147 @@ function handleDrop(event) {
   }
 }
 
+// Validation functions
+function validateFileSize(file) {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File size exceeds maximum limit of ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+  }
+}
+
+function validateHeaders(headers) {
+  const missingHeaders = REQUIRED_HEADERS.filter(
+    (header) => !headers.some((h) => h.toLowerCase() === header.toLowerCase())
+  );
+
+  if (missingHeaders.length > 0) {
+    throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
+  }
+
+  const unexpectedHeaders = headers.filter(
+    (header) => !Array.from(EXPECTED_HEADERS).some((h) => h.toLowerCase() === header.toLowerCase())
+  );
+
+  if (unexpectedHeaders.length > 0) {
+    console.warn(`Warning: Unexpected columns found: ${unexpectedHeaders.join(', ')}`);
+  }
+}
+
+function validateRowCount(rowCount) {
+  if (rowCount > MAX_ROWS) {
+    throw new Error(`File contains ${rowCount} rows, which exceeds the maximum limit of ${MAX_ROWS} rows.`);
+  }
+}
+
+function validateContent(headers, dataRows) {
+  const errors = [];
+  const yesNoFields = [
+    'Have you used a previous name?',
+    'In employment, including self-employment',
+    'UK/EEA National',
+    'Will you undertake more than 50% of your apprenticeship role within England?',
+    'Resident in the UK/EEA for 3 years',
+    'Requires a Work Permit',
+    'In the last 12 months, have you undertaken, or are you planning to undertake, any other government-funded training (excluding apprenticeships)',
+    'Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?',
+    'Will you be paid (at least) the apprenticeship minimum wage for the duration of the apprenticeship?',
+    'Do you have a permanent contract?',
+    'Apart from the apprenticeship you are currently applying for right now, are you enrolled on any another apprenticeship?',
+    'Have you previously applied or studied with Leeds Beckett University?',
+    'Have you spent any time in care?',
+  ];
+
+  // Sample validation - check first 100 rows
+  const sampleSize = Math.min(100, dataRows.length);
+  let invalidCount = 0;
+
+  for (let i = 0; i < sampleSize; i++) {
+    const row = dataRows[i];
+    const rowNum = i + 2; // +2 because row 1 is headers, row 2 is first data row
+
+    // Validate DOB format
+    const dobIndex = headers.findIndex((h) => h.toLowerCase() === 'dob');
+    if (dobIndex !== -1 && row[dobIndex]) {
+      if (!isValidDate(row[dobIndex])) {
+        errors.push(`Row ${rowNum}: DOB "${row[dobIndex]}" is not in a valid date format (expected DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD)`);
+        invalidCount++;
+      }
+    }
+
+    // Validate Type field
+    const typeIndex = headers.findIndex((h) => h.toLowerCase() === 'type');
+    if (typeIndex !== -1 && row[typeIndex]) {
+      const validTypes = ['Completed', 'In progress', 'Not started'];
+      if (!validTypes.includes(row[typeIndex])) {
+        errors.push(`Row ${rowNum}: Type "${row[typeIndex]}" must be one of: ${validTypes.join(', ')}`);
+        invalidCount++;
+      }
+    }
+
+    // Validate Yes/No fields
+    yesNoFields.forEach((field) => {
+      const fieldIndex = headers.findIndex((h) => h.toLowerCase() === field.toLowerCase());
+      if (fieldIndex !== -1 && row[fieldIndex]) {
+        const value = row[fieldIndex].toLowerCase().trim();
+        if (!['yes', 'no', 'y', 'n'].includes(value)) {
+          errors.push(`Row ${rowNum}: "${field}" value "${row[fieldIndex]}" must be "Yes" or "No"`);
+          invalidCount++;
+        }
+      }
+    });
+
+    // Validate Weekly contracted hours is numeric
+    const hoursIndex = headers.findIndex((h) => h.toLowerCase() === 'weekly contracted hours');
+    if (hoursIndex !== -1 && row[hoursIndex]) {
+      const hours = parseFloat(row[hoursIndex]);
+      if (isNaN(hours) || hours < 0) {
+        errors.push(`Row ${rowNum}: Weekly contracted hours "${row[hoursIndex]}" must be a non-negative number`);
+        invalidCount++;
+      }
+    }
+
+    if (invalidCount >= 5) {
+      break;
+    }
+  }
+
+  if (errors.length > 0) {
+    const displayErrors = errors.slice(0, 5);
+    const message = `Data validation errors found:\n${displayErrors.join('\n')}${errors.length > 5 ? `\n... and ${errors.length - 5} more errors` : ''}`;
+    throw new Error(message);
+  }
+}
+
+function isValidDate(dateString) {
+  if (!dateString || typeof dateString !== 'string') {
+    return false;
+  }
+
+  const trimmed = dateString.trim();
+
+  // Check YYYY-MM-DD format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const date = new Date(trimmed);
+    return !isNaN(date.getTime());
+  }
+
+  // Check DD/MM/YYYY or MM/DD/YYYY format
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(trimmed)) {
+    const parts = trimmed.split('/');
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    let year = parseInt(parts[2], 10);
+
+    if (parts[2].length === 2) {
+      year += year < 50 ? 2000 : 1900;
+    }
+
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  return false;
+}
+
 async function handleSelection(event) {
   const [file] = event.target.files;
   if (file) {
@@ -55,6 +245,9 @@ async function processFile(file) {
   fileMeta.textContent = `${formatSize(file.size)} · ${formatDate(file.lastModified)}`;
 
   try {
+    // Validate file size
+    validateFileSize(file);
+
     const parsed = await parseFile(file);
 
     if (parsed.rows.length === 0) {
@@ -62,7 +255,18 @@ async function processFile(file) {
     }
 
     const headers = parsed.rows[0].map((value, index) => value?.trim() || `Column ${index + 1}`);
+    
+    // Validate headers
+    validateHeaders(headers);
+
     const dataRows = parsed.rows.slice(1).filter((row, index) => index !== 0 || !shouldSkipDescriptionRow(headers, row));
+    
+    // Validate row count
+    validateRowCount(dataRows.length);
+
+    // Validate content
+    validateContent(headers, dataRows);
+
     const previewRows = dataRows.slice(0, previewLimit);
     const normalizedRows = previewRows.map((row) => padRow(row, headers.length));
 

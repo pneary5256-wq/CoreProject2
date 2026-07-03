@@ -14,7 +14,6 @@ const previewNote = document.querySelector('#previewNote');
 const clearButton = document.querySelector('#clearButton');
 
 const previewLimit = 200;
-let activeFile = null;
 
 // Validation constants
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -254,7 +253,6 @@ async function handleSelection(event) {
 }
 
 async function processFile(file) {
-  activeFile = file;
   clearButton.disabled = false;
   setMessage(`Reading ${file.name}...`);
   fileMeta.textContent = `${formatSize(file.size)} · ${formatDate(file.lastModified)}`;
@@ -270,16 +268,16 @@ async function processFile(file) {
     }
 
     const headers = parsed.rows[0].map((value, index) => value?.trim() || `Column ${index + 1}`);
-    
-    // Validate headers
+
     validateHeaders(headers);
 
-    const dataRows = parsed.rows.slice(1).filter((row, index) => index !== 0 || !shouldSkipDescriptionRow(headers, row));
-    
-    // Validate row count
-    validateRowCount(dataRows.length);
+    const dataRows = parsed.rows.slice(1);
+    if (dataRows.length > 0 && shouldSkipDescriptionRow(headers, dataRows[0])) {
+      // Some exports include a short description row immediately after the header row.
+      dataRows.shift();
+    }
 
-    // Validate content
+    validateRowCount(dataRows.length);
     validateContent(headers, dataRows);
 
     const previewRows = dataRows.slice(0, previewLimit);
@@ -373,7 +371,6 @@ async function assertSupportedTextFile(file) {
 }
 
 function resetView() {
-  activeFile = null;
   csvInput.value = '';
   clearButton.disabled = true;
   fileMeta.textContent = 'Waiting for upload';
@@ -651,20 +648,6 @@ function looksLikeDataCell(value) {
   }
 
   return false;
-}
-
-function looksLikeDescriptionCell(value) {
-  const cell = String(value).trim();
-
-  if (!cell) {
-    return false;
-  }
-
-  if (looksLikeDataCell(cell)) {
-    return false;
-  }
-
-  return cell.length > 12 || /\s/.test(cell);
 }
 
 function padRow(row, targetLength) {

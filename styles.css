@@ -284,6 +284,42 @@ th {
   color: var(--muted);
 }
 
+td.cell-flag {
+  position: relative;
+}
+
+td.cell-flag--warning {
+  background: rgba(255, 198, 92, 0.09);
+  box-shadow: inset 3px 0 0 rgba(255, 198, 92, 0.9);
+}
+
+td.cell-flag--error {
+  background: rgba(255, 139, 139, 0.12);
+  box-shadow: inset 3px 0 0 rgba(255, 139, 139, 0.95);
+}
+
+td.cell-long-text {
+  min-width: 260px;
+}
+
+.cell-scroll {
+  max-height: 8rem;
+  overflow: auto;
+  padding-right: 4px;
+  white-space: normal;
+  scrollbar-width: thin;
+}
+
+.cell-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cell-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(168, 183, 214, 0.45);
+}
+
 tbody tr:hover {
   background: rgba(111, 211, 255, 0.04);
 }

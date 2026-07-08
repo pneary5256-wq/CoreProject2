@@ -4,17 +4,24 @@ const csvInput = document.querySelector('#csvInput');
 const dropzone = document.querySelector('#dropzone');
 const message = document.querySelector('#message');
 const fileMeta = document.querySelector('#fileMeta');
-const rowCount = document.querySelector('#rowCount');
-const columnCount = document.querySelector('#columnCount');
-const delimiterLabel = document.querySelector('#delimiterLabel');
-const previewCount = document.querySelector('#previewCount');
-const tableHead = document.querySelector('#tableHead');
-const tableBody = document.querySelector('#tableBody');
-const previewNote = document.querySelector('#previewNote');
+const totalApplicantsCount = document.querySelector('#totalApplicantsCount');
+const eligibleCount = document.querySelector('#eligibleCount');
+const ineligibleCount = document.querySelector('#ineligibleCount');
+const reviewCount = document.querySelector('#reviewCount');
+const missingDataCount = document.querySelector('#missingDataCount');
+const applicantList = document.querySelector('#applicantList');
+const applicantDetails = document.querySelector('#applicantDetails');
+const summaryOutput = document.querySelector('#summaryOutput');
+const configureRulesButton = document.querySelector('#configureRulesButton');
+const copySummaryButton = document.querySelector('#copySummaryButton');
 const clearButton = document.querySelector('#clearButton');
 
 const previewLimit = 200;
 const AGE_CUTOFF_DATE = new Date('2026-09-01T00:00:00Z');
+const appState = {
+  applicants: [],
+  selectedApplicantIndex: -1,
+};
 
 // Validation constants
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -78,6 +85,14 @@ dropzone.addEventListener('dragover', handleDragOver);
 dropzone.addEventListener('dragleave', handleDragLeave);
 dropzone.addEventListener('drop', handleDrop);
 clearButton.addEventListener('click', resetView);
+configureRulesButton.addEventListener('click', () => {
+  setMessage('Configure Rules will be available in a later step.');
+});
+copySummaryButton.addEventListener('click', () => {
+  setMessage('Summary output is not enabled yet.');
+});
+applicantList.addEventListener('click', handleApplicantListClick);
+configureRulesButton.disabled = true;
 
 function handleDragOver(event) {
   event.preventDefault();
@@ -253,51 +268,16 @@ async function processFile(file) {
     validateRowCount(dataRows.length);
     validateContent(headers, dataRows);
 
-    const previewRows = dataRows.slice(0, previewLimit);
-    const normalizedRows = previewRows.map((row) => normalizePreviewRow(headers, row));
-    const findings = evaluateRules(headers, dataRows);
-    const previewFindings = findings.filter((finding) => finding.rowIndex < previewRows.length);
+    const applicants = dataRows.map((row, index) => evaluateApplicant(headers, row, index));
+    appState.applicants = applicants;
+    appState.selectedApplicantIndex = -1;
 
-    rowCount.textContent = String(dataRows.length);
-    columnCount.textContent = String(headers.length);
-    delimiterLabel.textContent = parsed.sourceLabel;
-    previewCount.textContent = String(normalizedRows.length);
-
-    renderTable(headers, normalizedRows, previewFindings);
-
-    const noteParts = [];
-
-    if (dataRows.length > previewLimit) {
-      noteParts.push(`Showing the first ${previewLimit} data rows out of ${dataRows.length}.`);
-    }
-
-    if (findings.length > 0) {
-      const counts = summarizeFindings(findings);
-      const summaryParts = [];
-
-      if (counts.error > 0) {
-        summaryParts.push(`${counts.error} ineligible`);
-      }
-
-      if (counts.warning > 0) {
-        summaryParts.push(`${counts.warning} for review`);
-      }
-
-      if (summaryParts.length > 0) {
-        noteParts.push(`Rule findings: ${summaryParts.join(', ')}.`);
-      }
-    }
-
-    previewNote.textContent = noteParts.join(' ');
+    fileMeta.textContent = `${file.name} · ${parsed.sourceLabel}`;
+    renderDashboard(applicants);
 
     setMessage(`Loaded ${file.name} successfully.`);
   } catch (error) {
-    resetTable();
-    rowCount.textContent = '0';
-    columnCount.textContent = '0';
-    delimiterLabel.textContent = '-';
-    previewCount.textContent = '0';
-    previewNote.textContent = '';
+    resetView();
     setMessage(error.message || 'Unable to parse that file.', true);
   }
 }
@@ -368,14 +348,395 @@ function resetView() {
   csvInput.value = '';
   clearButton.disabled = true;
   fileMeta.textContent = 'Waiting for upload';
-  rowCount.textContent = '0';
-  columnCount.textContent = '0';
-  delimiterLabel.textContent = '-';
-  previewCount.textContent = '0';
-  previewNote.textContent = '';
+  totalApplicantsCount.textContent = '0';
+  eligibleCount.textContent = '0';
+  ineligibleCount.textContent = '0';
+  reviewCount.textContent = '0';
+  missingDataCount.textContent = '0';
+  applicantList.innerHTML = '';
+  applicantDetails.innerHTML = '<div class="empty-state-panel">Select an applicant to inspect the criteria breakdown.</div>';
+  summaryOutput.value = '';
   setMessage('No file selected yet.');
-  resetTable();
+  appState.applicants = [];
+  appState.selectedApplicantIndex = -1;
 }
+
+function handleApplicantListClick(event) {
+  const button = event.target.closest('[data-applicant-index]');
+
+  if (!button) {
+    return;
+  }
+
+  const index = Number(button.dataset.applicantIndex);
+
+  if (Number.isNaN(index)) {
+    return;
+  }
+
+  appState.selectedApplicantIndex = index;
+  renderApplicantDetails();
+  renderApplicantList();
+}
+
+function renderDashboard(applicants) {
+  const metrics = applicants.reduce(
+    (summary, applicant) => {
+      summary.total += 1;
+      summary[applicant.statusKey] += 1;
+      return summary;
+    },
+    {
+      total: 0,
+      pass: 0,
+      fail: 0,
+      review: 0,
+      missing: 0,
+    },
+  );
+
+  totalApplicantsCount.textContent = String(metrics.total);
+  eligibleCount.textContent = String(metrics.pass);
+  ineligibleCount.textContent = String(metrics.fail);
+  reviewCount.textContent = String(metrics.review);
+  missingDataCount.textContent = String(metrics.missing);
+
+  summaryOutput.value = '';
+  renderApplicantList();
+  renderApplicantDetails();
+}
+
+function renderApplicantList() {
+  if (appState.applicants.length === 0) {
+    applicantList.innerHTML = '<div class="empty-state-panel">Upload a file to see applicants listed here.</div>';
+    return;
+  }
+
+  applicantList.innerHTML = appState.applicants
+    .map(
+      (applicant, index) => `
+        <button
+          type="button"
+          class="applicant-item applicant-item--${applicant.statusKey}${index === appState.selectedApplicantIndex ? ' is-selected' : ''}"
+          data-applicant-index="${index}"
+        >
+          <span class="applicant-item__name">${escapeHtml(applicant.name)}</span>
+          <span class="status-pill status-pill--${applicant.statusKey}">${escapeHtml(applicant.statusLabel)}</span>
+        </button>
+      `,
+    )
+    .join('');
+}
+
+function renderApplicantDetails() {
+  const applicant = appState.applicants[appState.selectedApplicantIndex];
+
+  if (!applicant) {
+    applicantDetails.innerHTML = '<div class="empty-state-panel">Select an applicant to inspect the criteria breakdown.</div>';
+    return;
+  }
+
+  const criteriaMarkup = applicant.criteria
+    .map(
+      (criterion) => `
+        <article class="criterion-card criterion-card--${criterion.status}">
+          <div class="criterion-card__top">
+            <span class="criterion-card__label">${escapeHtml(criterion.label)}</span>
+            <span class="status-pill status-pill--${criterion.status}">${escapeHtml(criterion.statusLabel)}</span>
+          </div>
+          <p class="criterion-card__value">${escapeHtml(criterion.value)}</p>
+          <p class="criterion-card__note">${escapeHtml(criterion.note)}</p>
+        </article>
+      `,
+    )
+    .join('');
+
+  applicantDetails.innerHTML = `
+    <div class="detail-summary detail-summary--${applicant.statusKey}">
+      <div>
+        <p class="detail-name">${escapeHtml(applicant.name)}</p>
+        <p class="detail-subtitle">${escapeHtml(applicant.subTitle)}</p>
+      </div>
+      <span class="status-pill status-pill--${applicant.statusKey}">${escapeHtml(applicant.statusLabel)}</span>
+    </div>
+    <div class="criteria-grid">
+      ${criteriaMarkup}
+    </div>
+  `;
+}
+
+function evaluateApplicant(headers, row, rowIndex) {
+  const getValue = (headerName) => {
+    const headerIndex = headers.findIndex((header) => header.toLowerCase() === headerName.toLowerCase());
+
+    if (headerIndex === -1) {
+      return '';
+    }
+
+    return String(row[headerIndex] ?? '').trim();
+  };
+
+  const firstName = getValue('First name');
+  const lastName = getValue('Last name');
+  const fallbackName = getValue('Email') || getValue('Id') || `Applicant ${rowIndex + 1}`;
+  const applicantName = [firstName, lastName].filter(Boolean).join(' ') || fallbackName;
+  const criteria = [];
+
+  const addCriterion = (label, value, status, note, statusLabel = status.toUpperCase()) => {
+    criteria.push({
+      label,
+      value: value || 'Not provided',
+      status,
+      statusLabel,
+      note,
+    });
+  };
+
+  const dob = getValue('DOB');
+  if (!dob) {
+    addCriterion('DOB', 'Not provided', 'missing', 'Date of birth is required.');
+  } else {
+    const parsedDob = parseFlexibleDate(dob);
+    if (!parsedDob) {
+      addCriterion('DOB', dob, 'fail', 'Date format is not recognised.');
+    } else {
+      const ageAtCutoff = getAgeOnDate(parsedDob, AGE_CUTOFF_DATE);
+      const meetsAge = ageAtCutoff >= 18;
+      addCriterion(
+        'Minimum Age Requirement Met?',
+        `${meetsAge ? 'Yes' : 'No'}, they will be ${ageAtCutoff} at the start of the apprenticeship.`,
+        meetsAge ? 'pass' : 'fail',
+        meetsAge ? 'Age requirement met.' : 'Applicant will be under 18 on 1 September 2026.',
+      );
+    }
+  }
+
+  addYesNoCriterion(criteria, 'Have you used a previous name?', getValue('Have you used a previous name?'), {
+    yes: { status: 'review', note: 'Previous name declared and needs checking.' },
+    no: { status: 'pass', note: 'No previous name declared.' },
+    missing: { status: 'missing', note: 'Previous name response is required.' },
+  });
+
+  const workingHours = getValue('What will be your contracted weekly working hours?');
+  if (!workingHours) {
+    addCriterion('Working Hours', 'Not provided', 'missing', 'Weekly working hours are required.');
+  } else {
+    const hours = parseWeeklyHours(workingHours);
+    if (hours == null) {
+      addCriterion('Working Hours', workingHours, 'fail', 'Working hours could not be interpreted as a number.');
+    } else if (hours < 30) {
+      addCriterion('Working Hours', String(hours), 'review', 'Part-time hours below 30 need review.');
+    } else if (hours > 48) {
+      addCriterion('Working Hours', String(hours), 'fail', 'Weekly hours exceed the legal limit of 48.');
+    } else {
+      addCriterion('Working Hours', String(hours), 'pass', 'Working hours are within the expected range.');
+    }
+  }
+
+  addYesNoCriterion(criteria, 'In employment, including self-employment', getValue('In employment, including self-employment'), {
+    yes: { status: 'pass', note: 'Applicant is in employment.' },
+    no: { status: 'fail', note: 'Applicant must be in employment.' },
+    missing: { status: 'missing', note: 'Employment status is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'UK/EEA National', getValue('UK/EEA National'), {
+    yes: { status: 'pass', note: 'UK/EEA national declared.' },
+    no: { status: 'review', note: 'Applicant is not marked as UK/EEA national and needs checking.' },
+    missing: { status: 'missing', note: 'Nationality status is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'Will you undertake more than 50% of your apprenticeship role within England?', getValue('Will you undertake more than 50% of your apprenticeship role within England?'), {
+    yes: { status: 'pass', note: 'Role is mainly within England.' },
+    no: { status: 'fail', note: 'Applicant must undertake more than 50% of the apprenticeship role within England.' },
+    missing: { status: 'missing', note: 'England workplace check is required.' },
+  });
+
+  const countryOfResidence = getValue('Country of residence');
+  if (!countryOfResidence) {
+    addCriterion('Country of residence', 'Not provided', 'missing', 'Country of residence is required.');
+  } else if (normalizeCountry(countryOfResidence) !== 'unitedkingdom') {
+    addCriterion('Country of residence', countryOfResidence, 'fail', 'Country of residence must be UnitedKingdom.');
+  } else {
+    addCriterion('Country of residence', countryOfResidence, 'pass', 'Country of residence matches the requirement.');
+  }
+
+  const nationality = getValue('Nationality');
+  if (!nationality) {
+    addCriterion('Nationality', 'Not provided', 'missing', 'Nationality is required.');
+  } else if (normalizeCountry(nationality) !== 'unitedkingdom') {
+    addCriterion('Nationality', nationality, 'review', 'Nationality is not UnitedKingdom and needs checking.');
+  } else {
+    addCriterion('Nationality', nationality, 'pass', 'Nationality matches the expected value.');
+  }
+
+  const countryOfBirth = getValue('Country of birth');
+  if (!countryOfBirth) {
+    addCriterion('Country of birth', 'Not provided', 'missing', 'Country of birth is required.');
+  } else if (normalizeCountry(countryOfBirth) !== 'unitedkingdom') {
+    addCriterion('Country of birth', countryOfBirth, 'review', 'Country of birth is not UnitedKingdom and needs checking.');
+  } else {
+    addCriterion('Country of birth', countryOfBirth, 'pass', 'Country of birth matches the expected value.');
+  }
+
+  addYesNoCriterion(criteria, 'Resident in the UK/EEA for 3 years', getValue('Resident in the UK/EEA for 3 years'), {
+    yes: { status: 'pass', note: 'Residency requirement met.' },
+    no: { status: 'fail', note: 'Applicant must be resident in the UK/EEA for 3 years.' },
+    missing: { status: 'missing', note: 'Residency declaration is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'Requires a Work Permit', getValue('Requires a Work Permit'), {
+    yes: { status: 'review', note: 'Applicant requires a work permit and needs checking.' },
+    no: { status: 'pass', note: 'No work permit required.' },
+    missing: { status: 'missing', note: 'Work permit status is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'Other government-funded training', getValue('In the last 12 months, have you undertaken, or are you planning to undertake, any other government-funded training (excluding apprenticeships)'), {
+    yes: { status: 'review', note: 'Other government-funded training declared and needs further checks.' },
+    no: { status: 'pass', note: 'No other government-funded training declared.' },
+    missing: { status: 'missing', note: 'Training history is required.' },
+  }, 'In the last 12 months, have you undertaken, or are you planning to undertake, any other government-funded training (excluding apprenticeships)');
+
+  const evidence = getValue('Details of evidence presented');
+  if (!evidence) {
+    addCriterion('Details of evidence presented', 'Not provided', 'missing', 'Evidence details need to be completed.');
+  } else {
+    addCriterion('Details of evidence presented', evidence, 'review', 'Evidence details should be checked in Aptem.');
+  }
+
+  addYesNoCriterion(criteria, 'Contracted for full duration', getValue('Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?'), {
+    yes: { status: 'pass', note: 'Contract covers the full apprenticeship duration.' },
+    no: { status: 'fail', note: 'Applicant must be contracted for the full duration of the apprenticeship.' },
+    missing: { status: 'missing', note: 'Contract duration response is required.' },
+  }, 'Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?');
+
+  addYesNoCriterion(criteria, 'Paid minimum wage', getValue('Will you be paid (at least) the apprenticeship minimum wage for the duration of the apprenticeship?'), {
+    yes: { status: 'pass', note: 'Apprenticeship minimum wage will be paid.' },
+    no: { status: 'fail', note: 'Applicant must be paid at least the apprenticeship minimum wage.' },
+    missing: { status: 'missing', note: 'Pay response is required.' },
+  }, 'Will you be paid (at least) the apprenticeship minimum wage for the duration of the apprenticeship?');
+
+  const qualifications = getValue('Please list the full titles of the qualification(s) you will be using to meet the entry requirements of the apprenticeship, including their level and grade (e.g., Level 3 qualifications that hold UCAS points, a degree certificate).');
+  if (!qualifications) {
+    addCriterion('Qualifications used to meet entry requirements', 'Not provided', 'missing', 'Qualification titles need to be completed.');
+  } else {
+    addCriterion('Qualifications used to meet entry requirements', qualifications, 'review', 'Qualification details should be checked in Aptem.');
+  }
+
+  const additionalQualifications = getValue('If you hold any additional professional qualifications please list them here (e.g. role specific training, CPD).');
+  if (additionalQualifications) {
+    addCriterion('Additional professional qualifications', additionalQualifications, 'review', 'Additional professional qualifications should be checked in Aptem.');
+  } else {
+    addCriterion('Additional professional qualifications', 'Not provided', 'pass', 'No additional professional qualifications declared.');
+  }
+
+  addYesNoCriterion(criteria, 'Permanent contract', getValue('Do you have a permanent contract?'), {
+    yes: { status: 'pass', note: 'Permanent contract declared.' },
+    no: { status: 'review', note: 'Applicant does not have a permanent contract and needs review.' },
+    missing: { status: 'missing', note: 'Permanent contract response is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'Another apprenticeship', getValue('Apart from the apprenticeship you are currently applying for right now, are you enrolled on any another apprenticeship?'), {
+    yes: { status: 'pass', note: 'Applicant is enrolled on another apprenticeship.' },
+    no: { status: 'review', note: 'Further End Point Assessment details are required.' },
+    missing: { status: 'missing', note: 'Another apprenticeship response is required.' },
+  });
+
+  addYesNoCriterion(criteria, 'Leeds Beckett previous student', getValue('Have you previously applied or studied with Leeds Beckett University?'), {
+    yes: { status: 'review', note: 'Previous Leeds Beckett student declaration needs checking.' },
+    no: { status: 'pass', note: 'No previous Leeds Beckett study declared.' },
+    missing: { status: 'missing', note: 'Previous Leeds Beckett study response is required.' },
+  });
+
+  const studentNumber = getValue('If yes, please give your Leeds Beckett Student Number if known.');
+  if (studentNumber) {
+    addCriterion('Leeds Beckett Student Number', studentNumber, 'review', 'Student number is present and should be checked.');
+  } else {
+    addCriterion('Leeds Beckett Student Number', 'Not provided', 'pass', 'No student number was supplied.');
+  }
+
+  const niNumber = getValue('National insurance number');
+  if (!niNumber) {
+    addCriterion('National insurance number', 'Not provided', 'missing', 'National insurance number is required.');
+  } else {
+    addCriterion('National insurance number', niNumber, 'pass', 'National insurance number is present.');
+  }
+
+  const hasMissing = criteria.some((criterion) => criterion.status === 'missing');
+  const hasFail = criteria.some((criterion) => criterion.status === 'fail');
+  const hasReview = criteria.some((criterion) => criterion.status === 'review');
+  const statusKey = hasMissing ? 'missing' : hasFail ? 'fail' : hasReview ? 'review' : 'pass';
+
+  return {
+    name: applicantName,
+    subTitle: `Row ${rowIndex + 2}`,
+    statusKey,
+    statusLabel: statusKey === 'missing' ? 'MISSING DATA' : statusKey === 'fail' ? 'FAIL' : statusKey === 'review' ? 'REVIEW' : 'PASS',
+    criteria,
+  };
+}
+
+function addYesNoCriterion(criteria, label, value, outcomes, headerLabel = label) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+
+  if (!normalized) {
+    const missing = outcomes.missing || { status: 'missing', note: 'Response required.' };
+    criteria.push({
+      label: headerLabel,
+      value: 'Not provided',
+      status: missing.status,
+      statusLabel: missing.status.toUpperCase(),
+      note: missing.note,
+    });
+    return;
+  }
+
+  if (/^(yes|y|true)$/.test(normalized)) {
+    const yes = outcomes.yes || { status: 'pass', note: 'Pass.' };
+    criteria.push({
+      label: headerLabel,
+      value,
+      status: yes.status,
+      statusLabel: yes.status.toUpperCase(),
+      note: yes.note,
+    });
+    return;
+  }
+
+  if (/^(no|n|false)$/.test(normalized)) {
+    const no = outcomes.no || { status: 'review', note: 'Review required.' };
+    criteria.push({
+      label: headerLabel,
+      value,
+      status: no.status,
+      statusLabel: no.status.toUpperCase(),
+      note: no.note,
+    });
+    return;
+  }
+
+  criteria.push({
+    label: headerLabel,
+    value,
+    status: 'missing',
+    statusLabel: 'MISSING',
+    note: 'Response must be Yes or No.',
+  });
+}
+
+function getAgeOnDate(date, referenceDate) {
+  const yearDifference = referenceDate.getFullYear() - date.getFullYear();
+  const monthDifference = referenceDate.getMonth() - date.getMonth();
+  const dayDifference = referenceDate.getDate() - date.getDate();
+
+  let age = yearDifference;
+
+  if (monthDifference < 0 || (monthDifference === 0 && dayDifference < 0)) {
+    age -= 1;
+  }
+
+  return age;
+}
+
 
 function normalizePreviewRow(headers, row) {
   const paddedRow = padRow(row, headers.length);
@@ -1069,4 +1430,4 @@ function severityRank(severity) {
   }
 }
 
-resetTable();
+resetView();

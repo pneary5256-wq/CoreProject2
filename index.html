@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CoreProject2 | CSV Upload</title>
+    <title>Applicant Eligibility Analysis Tool</title>
     <meta
       name="description"
-      content="Upload a CSV file, preview the parsed data, and inspect summary metrics."
+      content="Upload applicant data, review eligibility metrics, and inspect row-by-row rule outcomes."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,94 +19,98 @@
   </head>
   <body>
     <main class="shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">CoreProject2</p>
-          <h1>Upload a CSV and inspect it instantly.</h1>
-          <p class="lede">
-            Drop in report exports, validate the headers, and preview the first rows before you
-            process anything further.
-          </p>
+      <header class="page-header">
+        <p class="eyebrow">Applicant Eligibility Analysis Tool</p>
+        <div class="page-header__actions">
+          <label id="dropzone" class="toolbar-button toolbar-button--header toolbar-button--dropzone" for="csvInput">
+            <input
+              id="csvInput"
+              type="file"
+              accept=".csv,.tsv,.xls,.xlsx,.xlsm,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            />
+            <span>Upload File (Drag and Drop)</span>
+          </label>
+          <button id="configureRulesButton" class="toolbar-button toolbar-button--header" type="button">
+            Configure Rules
+          </button>
+          <button id="clearButton" class="ghost-button ghost-button--compact" type="button" disabled>
+            Clear
+          </button>
         </div>
-        <div class="hero-card">
-          <div>
-            <p class="label">Supported</p>
-            <p class="value">CSV, TSV, and semicolon-delimited exports</p>
-          </div>
-          <div>
-            <p class="label">Parsing</p>
-            <p class="value">Quoted fields, escaped quotes, and multiline cells</p>
-          </div>
-        </div>
+      </header>
+
+      <div id="message" class="message message--top" role="status" aria-live="polite">
+        No file selected yet.
+      </div>
+
+      <section class="metrics-grid metrics-grid--five" aria-label="Eligibility metrics">
+        <article class="metric-card metric-card--accent">
+          <span class="metric-label">Total Applicants</span>
+          <strong id="totalApplicantsCount">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Eligible</span>
+          <strong id="eligibleCount">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Ineligible</span>
+          <strong id="ineligibleCount">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Review Required</span>
+          <strong id="reviewCount">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Missing Data</span>
+          <strong id="missingDataCount">0</strong>
+        </article>
       </section>
 
-      <section class="panel upload-panel" aria-labelledby="upload-title">
-        <div class="panel-header">
-          <div>
-            <p class="panel-kicker">Step 1</p>
-            <h2 id="upload-title">Choose a file</h2>
+      <section class="dashboard" aria-label="Applicant review workspace">
+        <article class="panel list-panel" aria-labelledby="applicants-title">
+          <div class="panel-header panel-header--compact">
+            <div>
+              <p class="panel-kicker">Applicants</p>
+              <h2 id="applicants-title">Applicant list</h2>
+            </div>
+            <div id="fileMeta" class="file-meta">Waiting for upload</div>
           </div>
-          <button id="clearButton" class="ghost-button" type="button" disabled>Clear</button>
-        </div>
 
-        <label class="dropzone" id="dropzone" for="csvInput">
-          <input
-            id="csvInput"
-            type="file"
-            accept=".csv,.tsv,.xls,.xlsx,.xlsm,.ods,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          />
-          <div class="dropzone-copy">
-            <span class="dropzone-icon">+</span>
-            <strong>Drag and drop a CSV here</strong>
-            <span>or click to browse your files</span>
+          <div id="applicantList" class="applicant-list" role="list" aria-label="Applicants"></div>
+        </article>
+
+        <article class="panel details-panel" aria-labelledby="details-title">
+          <div class="panel-header panel-header--compact">
+            <div>
+              <p class="panel-kicker">Details</p>
+              <h2 id="details-title">Applicant details</h2>
+            </div>
           </div>
-        </label>
 
-        <div id="message" class="message" role="status" aria-live="polite">
-          No file selected yet.
-        </div>
+          <div id="applicantDetails" class="applicant-details empty-state-panel">
+            Select an applicant to inspect the criteria breakdown.
+          </div>
+        </article>
       </section>
 
-      <section class="panel metrics-panel" aria-labelledby="metrics-title">
-        <div class="panel-header">
+      <section class="panel summary-panel" aria-labelledby="summary-title">
+        <div class="panel-header panel-header--compact">
           <div>
-            <p class="panel-kicker">Step 2</p>
-            <h2 id="metrics-title">Preview and summary</h2>
+            <p class="panel-kicker">Summary Output</p>
+            <h2 id="summary-title">Summary Output</h2>
           </div>
-          <div id="fileMeta" class="file-meta">Waiting for upload</div>
+          <button id="copySummaryButton" class="ghost-button" type="button" disabled>
+            Copy
+          </button>
         </div>
 
-        <div class="metrics-grid">
-          <article class="metric-card">
-            <span class="metric-label">Rows</span>
-            <strong id="rowCount">0</strong>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Columns</span>
-            <strong id="columnCount">0</strong>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Delimiter</span>
-            <strong id="delimiterLabel">-</strong>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Previewed</span>
-            <strong id="previewCount">0</strong>
-          </article>
-        </div>
-
-        <div class="table-wrap">
-          <table class="data-table" aria-label="CSV preview table">
-            <thead id="tableHead"></thead>
-            <tbody id="tableBody">
-              <tr>
-                <td class="empty-state">Upload a CSV to see the parsed data here.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p id="previewNote" class="preview-note"></p>
+        <textarea
+          id="summaryOutput"
+          class="summary-output"
+          rows="5"
+          readonly
+          placeholder="Summary output will appear here in a later step."
+        ></textarea>
       </section>
     </main>
   </body>

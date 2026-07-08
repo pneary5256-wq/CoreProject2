@@ -24,6 +24,7 @@ const REQUIRED_HEADERS = [
   'Type',
   'First name',
   'Last name',
+  'Email',
   'DOB',
   'Employer organisation',
   'Job title',
@@ -37,6 +38,7 @@ const EXPECTED_HEADERS = new Set([
   'Employer organisation',
   'First name',
   'Last name',
+  'Email',
   'Current programme',
   'Group level 4',
   'DOB',
@@ -161,6 +163,14 @@ function validateContent(headers, dataRows) {
     if (typeIndex !== -1 && normalize(row[typeIndex])) {
       if (normalize(row[typeIndex]).toLowerCase() !== 'user') {
         errors.push(`Row ${rowNum}: Type "${row[typeIndex]}" must be "User"`);
+        invalidCount++;
+      }
+    }
+
+    const emailIndex = getHeaderIndex('Email');
+    if (emailIndex !== -1 && normalize(row[emailIndex])) {
+      if (!normalize(row[emailIndex]).includes('@')) {
+        errors.push(`Row ${rowNum}: Email "${row[emailIndex]}" must contain "@"`);
         invalidCount++;
       }
     }

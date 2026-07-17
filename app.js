@@ -16,7 +16,6 @@ const configureRulesButton = document.querySelector('#configureRulesButton');
 const copySummaryButton = document.querySelector('#copySummaryButton');
 const clearButton = document.querySelector('#clearButton');
 
-const previewLimit = 200;
 const AGE_CUTOFF_DATE = new Date('2026-09-01T00:00:00Z');
 const appState = {
   applicants: [],
@@ -26,12 +25,6 @@ const appState = {
 // Validation constants
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_ROWS = 100000;
-const DATE_HEADERS = new Set(['DOB', 'Onboarding Deadline', 'Date of Birth']);
-const LONG_TEXT_HEADERS = new Set([
-  'Details of evidence presented',
-  'Please list the full titles of the qualification(s) you will be using to meet the entry requirements of the apprenticeship, including their level and grade (e.g., Level 3 qualifications that hold UCAS points, a degree certificate).',
-  'If you hold any additional professional qualifications please list them here (e.g. role specific training, CPD).',
-]);
 const REQUIRED_HEADERS = [
   'Id',
   'Type',
@@ -737,268 +730,6 @@ function getAgeOnDate(date, referenceDate) {
   return age;
 }
 
-
-function normalizePreviewRow(headers, row) {
-  const paddedRow = padRow(row, headers.length);
-
-  return paddedRow.map((cell, index) => {
-    const header = headers[index] ?? '';
-
-    if (!DATE_HEADERS.has(header)) {
-      return cell;
-    }
-
-    return normalizeUkDate(cell);
-  });
-}
-
-function evaluateRules(headers, dataRows) {
-  const findings = [];
-
-  dataRows.forEach((row, rowIndex) => {
-    addFinding(findings, rowIndex, headers, row, 'DOB', 'error', (value) => {
-      if (!value) {
-        return null;
-      }
-
-      if (!isValidDate(value)) {
-        return 'DOB needs checking in Aptem because the date format is not recognised.';
-      }
-
-      if (isUnderAgeOnDate(value, AGE_CUTOFF_DATE, 18)) {
-        return 'Applicant will be under 18 on 1 September 2026.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Have you used a previous name?', 'warning', (value) => {
-      if (isYesValue(value)) {
-        return 'Previous name declared and needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'What will be your contracted weekly working hours?', 'warning', (value) => {
-      const hours = parseWeeklyHours(value);
-
-      if (hours == null) {
-        return null;
-      }
-
-      if (hours < 30) {
-        return 'Part-time hours below 30 need review.';
-      }
-
-      if (hours > 48) {
-        return 'Weekly hours exceed the legal limit of 48.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'In employment, including self-employment', 'error', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant must be in employment.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'UK/EEA National', 'warning', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant is not marked as UK/EEA national and needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Will you undertake more than 50% of your apprenticeship role within England?', 'error', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant must undertake more than 50% of the apprenticeship role within England.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Country of residence', 'error', (value) => {
-      if (normalizeCountry(value) && normalizeCountry(value) !== 'unitedkingdom') {
-        return 'Country of residence must be UnitedKingdom.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Nationality', 'warning', (value) => {
-      if (normalizeCountry(value) && normalizeCountry(value) !== 'unitedkingdom') {
-        return 'Nationality is not UnitedKingdom and needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Country of birth', 'warning', (value) => {
-      if (normalizeCountry(value) && normalizeCountry(value) !== 'unitedkingdom') {
-        return 'Country of birth is not UnitedKingdom and needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Resident in the UK/EEA for 3 years', 'error', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant must be resident in the UK/EEA for 3 years.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Requires a Work Permit', 'warning', (value) => {
-      if (isYesValue(value)) {
-        return 'Applicant requires a work permit and needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'In the last 12 months, have you undertaken, or are you planning to undertake, any other government-funded training (excluding apprenticeships)', 'warning', (value) => {
-      if (isYesValue(value)) {
-        return 'Other government-funded training declared and needs further checks.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Details of evidence presented', 'warning', (value) => {
-      if (value) {
-        return 'Evidence details are free text and should be checked in Aptem.';
-      }
-
-      return 'Evidence details are missing and should be checked in Aptem.';
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?', 'error', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant must be contracted for the full apprenticeship duration.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Will you be paid (at least) the apprenticeship minimum wage for the duration of the apprenticeship?', 'error', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant must be paid at least the apprenticeship minimum wage.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Please list the full titles of the qualification(s) you will be using to meet the entry requirements of the apprenticeship, including their level and grade (e.g., Level 3 qualifications that hold UCAS points, a degree certificate).', 'warning', (value) => {
-      if (value) {
-        return 'Qualification details are free text and should be checked in Aptem.';
-      }
-
-      return 'Qualification details are missing and should be checked in Aptem.';
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'If you hold any additional professional qualifications please list them here (e.g. role specific training, CPD).', 'warning', (value) => {
-      if (value) {
-        return 'Additional professional qualifications are free text and should be checked in Aptem.';
-      }
-
-      return 'Additional professional qualifications are missing and should be checked in Aptem.';
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Do you have a permanent contract?', 'warning', (value) => {
-      if (isNoValue(value)) {
-        return 'Permanent contract is not declared and needs review.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Apart from the apprenticeship you are currently applying for right now, are you enrolled on any another apprenticeship?', 'warning', (value) => {
-      if (isNoValue(value)) {
-        return 'Applicant is not enrolled on another apprenticeship and needs additional End Point Assessment details.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'Have you previously applied or studied with Leeds Beckett University?', 'warning', (value) => {
-      if (isYesValue(value)) {
-        return 'Previous Leeds Beckett student declaration needs checking.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'If yes, please give your Leeds Beckett Student Number if known.', 'warning', (value) => {
-      if (value) {
-        return 'Leeds Beckett Student Number is present and should be checked.';
-      }
-
-      return null;
-    });
-
-    addFinding(findings, rowIndex, headers, row, 'National insurance number', 'warning', (value) => {
-      if (!value) {
-        return 'National insurance number is missing and the applicant should be chased.';
-      }
-
-      return null;
-    });
-  });
-
-  return findings;
-}
-
-function addFinding(findings, rowIndex, headers, row, headerName, severity, evaluator) {
-  const headerIndex = headers.findIndex((header) => header.toLowerCase() === headerName.toLowerCase());
-
-  if (headerIndex === -1) {
-    return;
-  }
-
-  const message = evaluator(String(row[headerIndex] ?? '').trim());
-
-  if (!message) {
-    return;
-  }
-
-  findings.push({
-    rowIndex,
-    columnIndex: headerIndex,
-    header: headers[headerIndex],
-    severity,
-    message,
-  });
-}
-
-function summarizeFindings(findings) {
-  return findings.reduce(
-    (summary, finding) => {
-      summary[finding.severity] += 1;
-      return summary;
-    },
-    { info: 0, warning: 0, error: 0 },
-  );
-}
-
-function isUnderAgeOnDate(dateValue, cutoffDate, minimumAge) {
-  const parsedDate = parseFlexibleDate(dateValue);
-
-  if (!parsedDate) {
-    return false;
-  }
-
-  const comparisonDate = new Date(parsedDate);
-  comparisonDate.setFullYear(comparisonDate.getFullYear() + minimumAge);
-
-  return comparisonDate > cutoffDate;
-}
-
 function parseWeeklyHours(value) {
   const text = String(value ?? '').trim();
 
@@ -1016,14 +747,6 @@ function parseWeeklyHours(value) {
   const hours = Number(match[0]);
 
   return Number.isNaN(hours) ? null : hours;
-}
-
-function isYesValue(value) {
-  return /^(yes|y|true)$/i.test(String(value ?? '').trim());
-}
-
-function isNoValue(value) {
-  return /^(no|n|false)$/i.test(String(value ?? '').trim());
 }
 
 function normalizeCountry(value) {
@@ -1066,45 +789,6 @@ function parseFlexibleDate(value) {
   return null;
 }
 
-function normalizeUkDate(value) {
-  const text = String(value ?? '').trim();
-
-  if (!text) {
-    return '';
-  }
-
-  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slashMatch) {
-    const first = Number(slashMatch[1]);
-    const second = Number(slashMatch[2]);
-    const year = normalizeYearPart(slashMatch[3]);
-
-    if (year == null) {
-      return text;
-    }
-
-    const ukDate = buildUkDate(year, second, first);
-    if (ukDate) {
-      return ukDate;
-    }
-
-    const alternateDate = buildUkDate(year, first, second);
-    if (alternateDate) {
-      return alternateDate;
-    }
-  }
-
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    const ukDate = buildUkDate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
-    if (ukDate) {
-      return ukDate;
-    }
-  }
-
-  return text;
-}
-
 function normalizeYearPart(yearPart) {
   const year = Number(yearPart);
 
@@ -1118,33 +802,6 @@ function normalizeYearPart(yearPart) {
 
   return year;
 }
-
-function buildUkDate(year, month, day) {
-  const parsedYear = Number(year);
-  const parsedMonth = Number(month);
-  const parsedDay = Number(day);
-
-  if ([parsedYear, parsedMonth, parsedDay].some((value) => Number.isNaN(value))) {
-    return null;
-  }
-
-  const date = new Date(parsedYear, parsedMonth - 1, parsedDay);
-
-  if (
-    date.getFullYear() !== parsedYear ||
-    date.getMonth() !== parsedMonth - 1 ||
-    date.getDate() !== parsedDay
-  ) {
-    return null;
-  }
-
-  const displayDay = String(parsedDay).padStart(2, '0');
-  const displayMonth = String(parsedMonth).padStart(2, '0');
-  const displayYear = String(parsedYear).padStart(4, '0');
-
-  return `${displayDay}/${displayMonth}/${displayYear}`;
-}
-
 function buildDate(year, month, day) {
   const parsedYear = Number(year);
   const parsedMonth = Number(month);
@@ -1170,57 +827,6 @@ function buildDate(year, month, day) {
 function setMessage(text, isError = false) {
   message.textContent = text;
   message.classList.toggle('error', isError);
-}
-
-function resetTable() {
-  tableHead.innerHTML = '';
-  tableBody.innerHTML = '<tr><td class="empty-state">Upload a CSV or Excel workbook to see the parsed data here.</td></tr>';
-}
-
-function renderTable(headers, rows, findings = []) {
-  const findingLookup = new Map();
-
-  findings.forEach((finding) => {
-    const key = `${finding.rowIndex}:${finding.columnIndex}`;
-    const existing = findingLookup.get(key);
-
-    if (!existing || severityRank(finding.severity) > severityRank(existing.severity)) {
-      findingLookup.set(key, finding);
-    }
-  });
-
-  tableHead.innerHTML = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`;
-  tableBody.innerHTML = rows.length
-    ? rows
-        .map((row, rowIndex) => {
-          const cells = row
-            .map((cell, columnIndex) => {
-              const finding = findingLookup.get(`${rowIndex}:${columnIndex}`);
-              const classes = [];
-
-              if (finding) {
-                classes.push('cell-flag', `cell-flag--${finding.severity}`);
-              }
-
-              if (LONG_TEXT_HEADERS.has(headers[columnIndex])) {
-                classes.push('cell-long-text');
-              }
-
-              const escapedCell = escapeHtml(cell ?? '');
-              const content = LONG_TEXT_HEADERS.has(headers[columnIndex])
-                ? `<div class="cell-scroll">${escapedCell || '&nbsp;'}</div>`
-                : escapedCell;
-              const title = finding ? ` title="${escapeHtml(finding.message)}"` : '';
-              const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : '';
-
-              return `<td${classAttr}${title}>${content}</td>`;
-            })
-            .join('');
-
-          return `<tr>${cells}</tr>`;
-        })
-        .join('')
-    : '<tr><td class="empty-state">The file only contains a header row.</td></tr>';
 }
 
 function detectDelimiter(text) {
@@ -1417,17 +1023,6 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-}
-
-function severityRank(severity) {
-  switch (severity) {
-    case 'error':
-      return 2;
-    case 'warning':
-      return 1;
-    default:
-      return 0;
-  }
 }
 
 resetView();

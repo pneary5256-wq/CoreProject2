@@ -15,8 +15,26 @@ const summaryOutput = document.querySelector('#summaryOutput');
 const configureRulesButton = document.querySelector('#configureRulesButton');
 const copySummaryButton = document.querySelector('#copySummaryButton');
 const clearButton = document.querySelector('#clearButton');
+const rulesPanel = document.querySelector('#rulesPanel');
+const closeRulesButton = document.querySelector('#closeRulesButton');
+const rulesForm = document.querySelector('#rulesForm');
+const ageCutoffInput = document.querySelector('#ageCutoffInput');
+const workingHoursReviewInput = document.querySelector('#workingHoursReviewInput');
+const workingHoursFailInput = document.querySelector('#workingHoursFailInput');
+const countryOfResidenceInput = document.querySelector('#countryOfResidenceInput');
+const rulesSummary = document.querySelector('#rulesSummary');
 
-const AGE_CUTOFF_DATE = new Date('2026-09-01T00:00:00Z');
+const DEFAULT_RULE_CONFIG = {
+  ageCutoffDate: '2026-09-01',
+  workingHoursReviewThreshold: 30,
+  workingHoursFailThreshold: 48,
+  countryOfResidence: 'UnitedKingdom',
+};
+
+const RULE_CONFIG_PATH = 'rules-config.json';
+
+const ruleState = { ...DEFAULT_RULE_CONFIG };
+let sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
 const appState = {
   applicants: [],
   selectedApplicantIndex: -1,
@@ -78,14 +96,42 @@ dropzone.addEventListener('dragover', handleDragOver);
 dropzone.addEventListener('dragleave', handleDragLeave);
 dropzone.addEventListener('drop', handleDrop);
 clearButton.addEventListener('click', resetView);
-configureRulesButton.addEventListener('click', () => {
-  setMessage('Configure Rules will be available in a later step.');
+configureRulesButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  openRulesPanel();
 });
+closeRulesButton.addEventListener('click', closeRulesPanel);
+rulesForm.addEventListener('submit', handleRulesSubmit);
+document.querySelector('#resetRulesButton').addEventListener('click', resetRulesToDefault);
 copySummaryButton.addEventListener('click', () => {
   setMessage('Summary output is not enabled yet.');
 });
 applicantList.addEventListener('click', handleApplicantListClick);
-configureRulesButton.disabled = true;
+void initApp();
+
+async function initApp() {
+  await loadSharedRuleConfig();
+  renderRulesPanel();
+  resetView();
+}
+
+async function loadSharedRuleConfig() {
+  try {
+    const response = await fetch(RULE_CONFIG_PATH, { cache: 'no-store' });
+
+    if (!response.ok) {
+      throw new Error(`Unable to load ${RULE_CONFIG_PATH}`);
+    }
+
+    const config = await response.json();
+    sharedRuleConfig = normalizeRuleConfig(config);
+  } catch (error) {
+    console.warn(error);
+    sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
+  }
+
+  applyRuleConfig(sharedRuleConfig);
+}
 
 function handleDragOver(event) {
   event.preventDefault();
@@ -354,6 +400,183 @@ function resetView() {
   appState.selectedApplicantIndex = -1;
 }
 
+function openRulesPanel() {
+  syncRulesForm();
+  renderRulesSummary();
+  rulesPanel.hidden = false;
+  rulesPanel.classList.remove('hidden');
+  rulesPanel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  ageCutoffInput.focus();
+}
+
+function closeRulesPanel() {
+  rulesPanel.hidden = true;
+  rulesPanel.classList.add('hidden');
+  configureRulesButton.focus();
+}
+
+function handleRulesSubmit(event) {
+  event.preventDefault();
+
+  try {
+    const nextConfig = readRuleConfigFromForm();
+
+    if (nextConfig.workingHoursReviewThreshold >= nextConfig.workingHoursFailThreshold) {
+      throw new Error('The review threshold must be lower than the fail threshold.');
+    }
+
+    applyRuleConfig(nextConfig);
+    renderRulesSummary();
+
+    if (appState.applicants.length > 0) {
+      renderDashboard(appState.applicants);
+    }
+
+    setMessage('Rule settings updated for this session. Update rules-config.json to share them with everyone.');
+    closeRulesPanel();
+  } catch (error) {
+    setMessage(error.message || 'Unable to save rules.', true);
+  }
+}
+
+function resetRulesToDefault() {
+  applyRuleConfig(sharedRuleConfig);
+  syncRulesForm();
+  renderRulesSummary();
+
+  if (appState.applicants.length > 0) {
+    renderDashboard(appState.applicants);
+  }
+
+  setMessage('Rule settings reset to the shared defaults.');
+}
+
+function applyRuleConfig(nextConfig) {
+  ruleState.ageCutoffDate = nextConfig.ageCutoffDate;
+  ruleState.workingHoursReviewThreshold = nextConfig.workingHoursReviewThreshold;
+  ruleState.workingHoursFailThreshold = nextConfig.workingHoursFailThreshold;
+  ruleState.countryOfResidence = nextConfig.countryOfResidence;
+}
+
+function normalizeRuleConfig(config) {
+  const source = config && typeof config === 'object' ? config : {};
+  const ageCutoffDate = typeof source.ageCutoffDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.ageCutoffDate.trim())
+    ? source.ageCutoffDate.trim()
+    : DEFAULT_RULE_CONFIG.ageCutoffDate;
+  const workingHoursReviewThreshold = Number(source.workingHoursReviewThreshold);
+  const workingHoursFailThreshold = Number(source.workingHoursFailThreshold);
+  const countryOfResidence = typeof source.countryOfResidence === 'string' && source.countryOfResidence.trim()
+    ? source.countryOfResidence.trim()
+    : DEFAULT_RULE_CONFIG.countryOfResidence;
+
+  return {
+    ageCutoffDate,
+    workingHoursReviewThreshold: Number.isFinite(workingHoursReviewThreshold)
+      ? workingHoursReviewThreshold
+      : DEFAULT_RULE_CONFIG.workingHoursReviewThreshold,
+    workingHoursFailThreshold: Number.isFinite(workingHoursFailThreshold)
+      ? workingHoursFailThreshold
+      : DEFAULT_RULE_CONFIG.workingHoursFailThreshold,
+    countryOfResidence,
+  };
+}
+
+function renderRulesPanel() {
+  syncRulesForm();
+  renderRulesSummary();
+}
+
+function syncRulesForm() {
+  ageCutoffInput.value = ruleState.ageCutoffDate;
+  workingHoursReviewInput.value = String(ruleState.workingHoursReviewThreshold);
+  workingHoursFailInput.value = String(ruleState.workingHoursFailThreshold);
+  countryOfResidenceInput.value = ruleState.countryOfResidence;
+}
+
+function readRuleConfigFromForm() {
+  const ageCutoffDate = ageCutoffInput.value.trim();
+  const workingHoursReviewThreshold = Number(workingHoursReviewInput.value);
+  const workingHoursFailThreshold = Number(workingHoursFailInput.value);
+  const countryOfResidence = countryOfResidenceInput.value.trim();
+
+  if (!ageCutoffDate) {
+    throw new Error('Age cutoff date is required.');
+  }
+
+  if (Number.isNaN(workingHoursReviewThreshold) || Number.isNaN(workingHoursFailThreshold)) {
+    throw new Error('Working hour thresholds must be valid numbers.');
+  }
+
+  if (!countryOfResidence) {
+    throw new Error('Expected country of residence is required.');
+  }
+
+  return {
+    ageCutoffDate,
+    workingHoursReviewThreshold,
+    workingHoursFailThreshold,
+    countryOfResidence,
+  };
+}
+
+function renderRulesSummary() {
+  if (!rulesSummary) {
+    return;
+  }
+
+  const summaryCards = [
+    {
+      label: 'Age rule',
+      value: formatRuleDate(ruleState.ageCutoffDate),
+      note: 'Applicants must be 18 or older on this date.',
+    },
+    {
+      label: 'Weekly hours',
+      value: `Review below ${ruleState.workingHoursReviewThreshold}`,
+      note: `Fail above ${ruleState.workingHoursFailThreshold}.`,
+    },
+    {
+      label: 'Residence',
+      value: ruleState.countryOfResidence,
+      note: 'Country matching is normalized before comparison.',
+    },
+    {
+      label: 'Fixed checks',
+      value: 'Current yes/no mappings stay in place',
+      note: 'This first pass exposes the thresholds that are already configurable in practice.',
+    },
+    {
+      label: 'Shared source',
+      value: RULE_CONFIG_PATH,
+      note: 'Update this file and republish the app to change the rules for everyone.',
+    },
+  ];
+
+  rulesSummary.innerHTML = summaryCards
+    .map(
+      (card) => `
+        <article class="rule-summary-card">
+          <span class="rule-summary-card__label">${escapeHtml(card.label)}</span>
+          <strong class="rule-summary-card__value">${escapeHtml(card.value)}</strong>
+          <p class="rule-summary-card__note">${escapeHtml(card.note)}</p>
+        </article>
+      `,
+    )
+    .join('');
+}
+
+function formatRuleDate(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+  }).format(date);
+}
+
 function handleApplicantListClick(event) {
   const button = event.target.closest('[data-applicant-index]');
 
@@ -493,13 +716,13 @@ function evaluateApplicant(headers, row, rowIndex) {
     if (!parsedDob) {
       addCriterion('DOB', dob, 'fail', 'Date format is not recognised.');
     } else {
-      const ageAtCutoff = getAgeOnDate(parsedDob, AGE_CUTOFF_DATE);
+      const ageAtCutoff = getAgeOnDate(parsedDob, getAgeCutoffDate());
       const meetsAge = ageAtCutoff >= 18;
       addCriterion(
         'Minimum Age Requirement Met?',
         `${meetsAge ? 'Yes' : 'No'}, they will be ${ageAtCutoff} at the start of the apprenticeship.`,
         meetsAge ? 'pass' : 'fail',
-        meetsAge ? 'Age requirement met.' : 'Applicant will be under 18 on 1 September 2026.',
+        meetsAge ? 'Age requirement met.' : `Applicant will be under 18 on ${formatRuleDate(ruleState.ageCutoffDate)}.`,
       );
     }
   }
@@ -517,10 +740,10 @@ function evaluateApplicant(headers, row, rowIndex) {
     const hours = parseWeeklyHours(workingHours);
     if (hours == null) {
       addCriterion('Working Hours', workingHours, 'fail', 'Working hours could not be interpreted as a number.');
-    } else if (hours < 30) {
-      addCriterion('Working Hours', String(hours), 'review', 'Part-time hours below 30 need review.');
-    } else if (hours > 48) {
-      addCriterion('Working Hours', String(hours), 'fail', 'Weekly hours exceed the legal limit of 48.');
+    } else if (hours < ruleState.workingHoursReviewThreshold) {
+      addCriterion('Working Hours', String(hours), 'review', `Part-time hours below ${ruleState.workingHoursReviewThreshold} need review.`);
+    } else if (hours > ruleState.workingHoursFailThreshold) {
+      addCriterion('Working Hours', String(hours), 'fail', `Weekly hours exceed the fail threshold of ${ruleState.workingHoursFailThreshold}.`);
     } else {
       addCriterion('Working Hours', String(hours), 'pass', 'Working hours are within the expected range.');
     }
@@ -547,8 +770,8 @@ function evaluateApplicant(headers, row, rowIndex) {
   const countryOfResidence = getValue('Country of residence');
   if (!countryOfResidence) {
     addCriterion('Country of residence', 'Not provided', 'missing', 'Country of residence is required.');
-  } else if (normalizeCountry(countryOfResidence) !== 'unitedkingdom') {
-    addCriterion('Country of residence', countryOfResidence, 'fail', 'Country of residence must be UnitedKingdom.');
+  } else if (normalizeCountry(countryOfResidence) !== normalizeCountry(ruleState.countryOfResidence)) {
+    addCriterion('Country of residence', countryOfResidence, 'fail', `Country of residence must be ${ruleState.countryOfResidence}.`);
   } else {
     addCriterion('Country of residence', countryOfResidence, 'pass', 'Country of residence matches the requirement.');
   }
@@ -728,6 +951,10 @@ function getAgeOnDate(date, referenceDate) {
   }
 
   return age;
+}
+
+function getAgeCutoffDate() {
+  return new Date(`${ruleState.ageCutoffDate}T00:00:00Z`);
 }
 
 function parseWeeklyHours(value) {
@@ -1025,4 +1252,3 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-resetView();

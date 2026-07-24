@@ -1,0 +1,6 @@
+{
+  "ageCutoffDate": "2026-09-01",
+  "workingHoursReviewThreshold": 30,
+  "workingHoursFailThreshold": 48,
+  "countryOfResidence": "UnitedKingdom"
+}

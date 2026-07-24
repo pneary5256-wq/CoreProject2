@@ -9,7 +9,7 @@
       content="Upload applicant data, review eligibility metrics, and inspect row-by-row rule outcomes."
     />
     <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="app.js" defer></script>
+    <script type="module" src="app.js?v=20260724" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -24,9 +24,9 @@
             />
             <span>Upload File (Drag and Drop)</span>
           </label>
-          <button id="configureRulesButton" class="toolbar-button toolbar-button--header" type="button">
+          <a id="configureRulesButton" class="toolbar-button toolbar-button--header" href="#rulesPanel">
             Configure Rules
-          </button>
+          </a>
           <button id="clearButton" class="ghost-button ghost-button--compact" type="button" disabled>
             Clear
           </button>
@@ -36,6 +36,60 @@
       <div id="message" class="message message--top" role="status" aria-live="polite">
         No file selected yet.
       </div>
+
+      <section id="rulesPanel" class="panel rules-panel hidden" aria-labelledby="rules-title">
+        <div class="panel-header panel-header--compact">
+          <div>
+            <p class="panel-kicker">Rule configuration</p>
+            <h2 id="rules-title">Configure rules</h2>
+            <p class="rules-panel__note">
+              Shared defaults are loaded from <strong>rules-config.json</strong>. Update that file and republish to
+              change the rules for everyone.
+            </p>
+          </div>
+          <button id="closeRulesButton" class="ghost-button" type="button">Close</button>
+        </div>
+
+        <div class="rules-layout">
+          <form id="rulesForm" class="rules-form">
+            <div class="rule-field">
+              <label for="ageCutoffInput">Age cutoff date</label>
+              <input id="ageCutoffInput" type="date" />
+              <p>Applicants must be at least 18 on this date.</p>
+            </div>
+
+            <div class="rule-field rule-field--split">
+              <div>
+                <label for="workingHoursReviewInput">Review below</label>
+                <input id="workingHoursReviewInput" type="number" min="0" step="0.5" />
+              </div>
+              <div>
+                <label for="workingHoursFailInput">Fail above</label>
+                <input id="workingHoursFailInput" type="number" min="0" step="0.5" />
+              </div>
+              <p>Weekly hours between these values are reviewed; values above the fail threshold are ineligible.</p>
+            </div>
+
+            <div class="rule-field">
+              <label for="countryOfResidenceInput">Expected country of residence</label>
+              <input id="countryOfResidenceInput" type="text" maxlength="64" />
+              <p>Country names are normalized, so punctuation and spacing do not matter.</p>
+            </div>
+
+            <div class="rules-actions">
+              <button id="saveRulesButton" class="toolbar-button toolbar-button--primary" type="submit">
+                Save changes
+              </button>
+              <button id="resetRulesButton" class="ghost-button" type="button">Reset defaults</button>
+            </div>
+          </form>
+
+          <aside class="rules-summary" aria-label="Applied checks summary">
+            <h3>Applied checks</h3>
+            <div id="rulesSummary" class="rules-summary__grid"></div>
+          </aside>
+        </div>
+      </section>
 
       <section class="metrics-grid metrics-grid--five" aria-label="Eligibility metrics">
         <article class="metric-card metric-card--accent">

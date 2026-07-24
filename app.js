@@ -18,6 +18,9 @@ const clearButton = document.querySelector('#clearButton');
 const rulesPanel = document.querySelector('#rulesPanel');
 const closeRulesButton = document.querySelector('#closeRulesButton');
 const rulesForm = document.querySelector('#rulesForm');
+const saveRulesButton = document.querySelector('#saveRulesButton');
+const updatePreferencesButton = document.querySelector('#updatePreferencesButton');
+const resetRulesButton = document.querySelector('#resetRulesButton');
 const ageCutoffInput = document.querySelector('#ageCutoffInput');
 const workingHoursReviewInput = document.querySelector('#workingHoursReviewInput');
 const workingHoursFailInput = document.querySelector('#workingHoursFailInput');
@@ -131,7 +134,8 @@ closeRulesButton.addEventListener('click', () => {
   }
 });
 rulesForm.addEventListener('submit', handleRulesSubmit);
-document.querySelector('#resetRulesButton').addEventListener('click', resetRulesToDefault);
+updatePreferencesButton.addEventListener('click', handleUpdatePreferences);
+resetRulesButton.addEventListener('click', resetRulesToDefault);
 copySummaryButton.addEventListener('click', () => {
   setMessage('Summary output is not enabled yet.');
 });
@@ -457,10 +461,26 @@ function handleRulesSubmit(event) {
       renderDashboard(appState.applicants);
     }
 
-    setMessage('Rule settings updated for this session. Update rules-config.json to share them with everyone.');
+    setMessage('Rule settings updated for this session. Use Update Preferences to export the JSON file.');
     closeRulesPanel();
   } catch (error) {
     setMessage(error.message || 'Unable to save rules.', true);
+  }
+}
+
+function handleUpdatePreferences() {
+  try {
+    const nextConfig = readRuleConfigFromForm();
+
+    if (nextConfig.workingHoursReviewThreshold >= nextConfig.workingHoursFailThreshold) {
+      throw new Error('The review threshold must be lower than the fail threshold.');
+    }
+
+    const normalizedConfig = normalizeRuleConfig(nextConfig);
+    downloadRuleConfig(normalizedConfig);
+    setMessage('rules-config.json downloaded. Replace the shared file with this version to update preferences.');
+  } catch (error) {
+    setMessage(error.message || 'Unable to update preferences.', true);
   }
 }
 
@@ -474,6 +494,21 @@ function resetRulesToDefault() {
   }
 
   setMessage('Rule settings reset to the shared defaults.');
+}
+
+function downloadRuleConfig(config) {
+  const blob = new Blob([`${JSON.stringify(config, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+
+  anchor.href = url;
+  anchor.download = 'rules-config.json';
+  anchor.rel = 'noopener';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function applyRuleConfig(nextConfig) {

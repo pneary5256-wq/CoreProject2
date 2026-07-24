@@ -136,7 +136,7 @@ rulesForm.addEventListener('submit', handleRulesSubmit);
 updatePreferencesButton.addEventListener('click', handleUpdatePreferences);
 resetRulesButton.addEventListener('click', resetRulesToDefault);
 copySummaryButton.addEventListener('click', () => {
-  setMessage('Summary output is not enabled yet.');
+  copySummaryToClipboard();
 });
 applicantList.addEventListener('click', handleApplicantListClick);
 void initApp();
@@ -426,6 +426,7 @@ function resetView() {
   applicantList.innerHTML = '';
   applicantDetails.innerHTML = '<div class="empty-state-panel">Select an applicant to inspect the criteria breakdown.</div>';
   summaryOutput.value = '';
+  copySummaryButton.disabled = true;
   setMessage('No file selected yet.');
   appState.applicants = [];
   appState.selectedApplicantIndex = -1;
@@ -698,6 +699,99 @@ function renderYesNoRules() {
   `).join('');
 }
 
+function renderSummaryOutput(applicant) {
+  const statement = buildEligibilityStatement(applicant);
+  summaryOutput.value = statement;
+  copySummaryButton.disabled = !statement;
+}
+
+function buildEligibilityStatement(applicant) {
+  if (!applicant || applicant.statusKey !== 'pass') {
+    return '';
+  }
+
+  const summaryInputs = applicant.summaryInputs || {};
+  const fullName = [summaryInputs.firstName, summaryInputs.lastName].filter(Boolean).join(' ') || applicant.name;
+  const ageAtCutoff = summaryInputs.ageAtCutoff;
+
+  if (!Number.isFinite(ageAtCutoff)) {
+    return '';
+  }
+
+  const lines = [
+    `${fullName}'s record has been reviewed in line with the applicable funding rules. All relevant requirements have been checked, and the apprentice has been assessed as meeting the necessary conditions to be eligible for funding.`,
+    `Apprentice is aged ${ageAtCutoff} and therefore meet the requirement of being 16 or over on the start date.`,
+  ];
+
+  const countryOfResidence = summaryInputs.countryOfResidence;
+  const nationality = summaryInputs.nationality;
+  const countryOfBirth = summaryInputs.countryOfBirth;
+  const requiresWorkPermit = normalizeYesNoAnswer(summaryInputs.requiresWorkPermit, 'no');
+  const contractedFullDuration = normalizeYesNoAnswer(summaryInputs.contractedFullDuration, 'yes');
+  const anotherApprenticeship = normalizeYesNoAnswer(summaryInputs.anotherApprenticeship, 'yes');
+  const previousStudent = normalizeYesNoAnswer(summaryInputs.leedsBeckettPreviousStudent, 'no');
+
+  const needsRightToWorkCheck =
+    normalizeCountry(countryOfResidence) !== normalizeCountry(ruleState.countryOfResidence) ||
+    normalizeCountry(nationality) !== normalizeCountry(ruleState.nationality) ||
+    normalizeCountry(countryOfBirth) !== normalizeCountry(ruleState.countryOfBirth) ||
+    requiresWorkPermit === 'yes';
+
+  const toFlaggedSentence = (shouldFlag, sentence) => (shouldFlag ? `Requires check by admin. ${sentence}` : sentence);
+
+  if (needsRightToWorkCheck) {
+    lines.push(
+      toFlaggedSentence(
+        true,
+        'The apprentice has the necessary right to work evidence and meets residency eligibility requirements (including 3-year residency rule where applicable).',
+      ),
+    );
+  } else {
+    lines.push('The apprentice has the necessary right to work evidence and meets residency eligibility requirements (including 3-year residency rule where applicable).');
+  }
+
+  lines.push(
+    toFlaggedSentence(
+      contractedFullDuration === 'no',
+      'Apprentice is employed in a real job with a contract of employment compliant with apprenticeship funding requirements.',
+    ),
+  );
+
+  lines.push(
+    toFlaggedSentence(
+      anotherApprenticeship === 'yes',
+      'Apprentice is not undertaking another apprenticeship or DfE-funded FE/HE programme that would conflict with funding eligibility.',
+    ),
+  );
+
+  lines.push(
+    toFlaggedSentence(
+      anotherApprenticeship === 'yes' || previousStudent === 'yes',
+      'Apprentice has not previously completed the same apprenticeship standard at the same or higher level.',
+    ),
+  );
+
+  lines.push('This assessment is based on the evidence available at the point of review and confirms compliance with the funding rule requirements relating to eligibility.');
+
+  return lines.join('\n\n');
+}
+
+async function copySummaryToClipboard() {
+  const text = summaryOutput.value.trim();
+
+  if (!text) {
+    setMessage('Generate a summary before copying it.');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    setMessage('Summary output copied to the clipboard.');
+  } catch (error) {
+    setMessage('Unable to copy the summary output.', true);
+  }
+}
+
 function formatRuleDate(value) {
   const date = new Date(`${value}T00:00:00Z`);
 
@@ -748,7 +842,16 @@ function renderDashboard(applicants) {
   ineligibleCount.textContent = String(metrics.fail);
   missingDataCount.textContent = String(metrics.missing);
 
+  if (appState.selectedApplicantIndex === -1) {
+    const firstPassIndex = applicants.findIndex((applicant) => applicant.statusKey === 'pass');
+
+    if (firstPassIndex !== -1) {
+      appState.selectedApplicantIndex = firstPassIndex;
+    }
+  }
+
   summaryOutput.value = '';
+  copySummaryButton.disabled = true;
   renderApplicantList();
   renderApplicantDetails();
 }
@@ -780,6 +883,8 @@ function renderApplicantDetails() {
 
   if (!applicant) {
     applicantDetails.innerHTML = '<div class="empty-state-panel">Select an applicant to inspect the criteria breakdown.</div>';
+    summaryOutput.value = '';
+    copySummaryButton.disabled = true;
     return;
   }
 
@@ -810,6 +915,8 @@ function renderApplicantDetails() {
       ${criteriaMarkup}
     </div>
   `;
+
+  renderSummaryOutput(applicant);
 }
 
 function evaluateApplicant(headers, row, rowIndex) {
@@ -828,6 +935,7 @@ function evaluateApplicant(headers, row, rowIndex) {
   const fallbackName = getValue('Email') || getValue('Id') || `Applicant ${rowIndex + 1}`;
   const applicantName = [firstName, lastName].filter(Boolean).join(' ') || fallbackName;
   const criteria = [];
+  let ageAtCutoff = null;
 
   const addCriterion = (label, value, status, note, statusLabel = status.toUpperCase()) => {
     criteria.push({
@@ -847,7 +955,7 @@ function evaluateApplicant(headers, row, rowIndex) {
     if (!parsedDob) {
       addCriterion('DOB', dob, 'fail', 'Date format is not recognised.');
     } else {
-      const ageAtCutoff = getAgeOnDate(parsedDob, getAgeCutoffDate());
+      ageAtCutoff = getAgeOnDate(parsedDob, getAgeCutoffDate());
       const meetsAge = ageAtCutoff >= 18;
       addCriterion(
         'Minimum Age Requirement Met?',
@@ -1017,6 +1125,18 @@ function evaluateApplicant(headers, row, rowIndex) {
     subTitle: `Row ${rowIndex + 2}`,
     statusKey,
     statusLabel: statusKey === 'missing' ? 'MISSING DATA' : statusKey === 'fail' ? 'FAIL' : 'PASS',
+    summaryInputs: {
+      firstName,
+      lastName,
+      ageAtCutoff,
+      countryOfResidence: getValue('Country of residence'),
+      nationality: getValue('Nationality'),
+      countryOfBirth: getValue('Country of birth'),
+      requiresWorkPermit: getValue('Requires a Work Permit'),
+      contractedFullDuration: getValue('Will you be contracted for the full duration of your apprenticeship, including the End-Point Assessment?'),
+      anotherApprenticeship: getValue('Apart from the apprenticeship you are currently applying for right now, are you enrolled on any another apprenticeship?'),
+      leedsBeckettPreviousStudent: getValue('Have you previously applied or studied with Leeds Beckett University?'),
+    },
     criteria,
   };
 }
@@ -1104,6 +1224,20 @@ function parseWeeklyHours(value) {
   const hours = Number(match[0]);
 
   return Number.isNaN(hours) ? null : hours;
+}
+
+function normalizeYesNoAnswer(value, fallback = 'yes') {
+  const normalized = String(value ?? '').trim().toLowerCase();
+
+  if (/^(yes|y|true)$/.test(normalized)) {
+    return 'yes';
+  }
+
+  if (/^(no|n|false)$/.test(normalized)) {
+    return 'no';
+  }
+
+  return fallback;
 }
 
 function normalizeCountry(value) {

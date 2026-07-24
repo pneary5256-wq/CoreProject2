@@ -8,8 +8,8 @@
       name="description"
       content="Upload applicant data, review eligibility metrics, and inspect row-by-row rule outcomes."
     />
-    <link rel="stylesheet" href="styles.css" />
-    <script type="module" src="app.js?v=20260724" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260724c" />
+    <script type="module" src="app.js?v=20260724c" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -24,7 +24,7 @@
             />
             <span>Upload File (Drag and Drop)</span>
           </label>
-          <a id="configureRulesButton" class="toolbar-button toolbar-button--header" href="#rulesPanel">
+          <a id="configureRulesButton" class="toolbar-button toolbar-button--header toolbar-button--dropzone" href="#rulesPanel">
             Configure Rules
           </a>
           <button id="clearButton" class="ghost-button ghost-button--compact" type="button" disabled>
@@ -37,7 +37,7 @@
         No file selected yet.
       </div>
 
-      <section id="rulesPanel" class="panel rules-panel hidden" aria-labelledby="rules-title">
+      <section id="rulesPanel" class="panel rules-panel" aria-labelledby="rules-title">
         <div class="panel-header panel-header--compact">
           <div>
             <p class="panel-kicker">Rule configuration</p>
@@ -47,7 +47,7 @@
               change the rules for everyone.
             </p>
           </div>
-          <button id="closeRulesButton" class="ghost-button" type="button">Close</button>
+          <a id="closeRulesButton" class="ghost-button" href="#">Close</a>
         </div>
 
         <div class="rules-layout">
@@ -55,26 +55,44 @@
             <div class="rule-field">
               <label for="ageCutoffInput">Age cutoff date</label>
               <input id="ageCutoffInput" type="date" />
-              <p>Applicants must be at least 18 on this date.</p>
             </div>
 
-            <div class="rule-field rule-field--split">
-              <div>
-                <label for="workingHoursReviewInput">Review below</label>
-                <input id="workingHoursReviewInput" type="number" min="0" step="0.5" />
+            <div class="rule-field rule-field--compound">
+              <label>Weekly hours</label>
+              <div class="rule-field__compound">
+                <div class="rule-field__mini">
+                  <span>Review below</span>
+                  <input id="workingHoursReviewInput" type="number" min="0" step="0.5" />
+                </div>
+                <div class="rule-field__mini">
+                  <span>Fail above</span>
+                  <input id="workingHoursFailInput" type="number" min="0" step="0.5" />
+                </div>
               </div>
-              <div>
-                <label for="workingHoursFailInput">Fail above</label>
-                <input id="workingHoursFailInput" type="number" min="0" step="0.5" />
-              </div>
-              <p>Weekly hours between these values are reviewed; values above the fail threshold are ineligible.</p>
             </div>
 
             <div class="rule-field">
               <label for="countryOfResidenceInput">Expected country of residence</label>
               <input id="countryOfResidenceInput" type="text" maxlength="64" />
-              <p>Country names are normalized, so punctuation and spacing do not matter.</p>
             </div>
+
+            <div class="rule-field">
+              <label for="nationalityInput">Nationality</label>
+              <input id="nationalityInput" type="text" maxlength="64" />
+            </div>
+
+            <div class="rule-field">
+              <label for="countryOfBirthInput">Country of birth</label>
+              <input id="countryOfBirthInput" type="text" maxlength="64" />
+            </div>
+
+            <section class="rules-group" aria-labelledby="yes-no-presets-title">
+              <div class="rules-group__header">
+                <h3 id="yes-no-presets-title">Yes/No presets</h3>
+                <p>Preset each rule to the answer that keeps the applicant eligible.</p>
+              </div>
+              <div id="yesNoRules" class="rules-group__grid"></div>
+            </section>
 
             <div class="rules-actions">
               <button id="saveRulesButton" class="toolbar-button toolbar-button--primary" type="submit">

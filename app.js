@@ -22,13 +22,37 @@ const ageCutoffInput = document.querySelector('#ageCutoffInput');
 const workingHoursReviewInput = document.querySelector('#workingHoursReviewInput');
 const workingHoursFailInput = document.querySelector('#workingHoursFailInput');
 const countryOfResidenceInput = document.querySelector('#countryOfResidenceInput');
+const nationalityInput = document.querySelector('#nationalityInput');
+const countryOfBirthInput = document.querySelector('#countryOfBirthInput');
 const rulesSummary = document.querySelector('#rulesSummary');
+const yesNoRules = document.querySelector('#yesNoRules');
+
+const YES_NO_RULE_DEFINITIONS = [
+  { key: 'previousName', label: 'Have you used a previous name?', expected: 'no' },
+  { key: 'inEmployment', label: 'In employment, including self-employment', expected: 'yes' },
+  { key: 'ukEeaNational', label: 'UK/EEA National', expected: 'yes' },
+  { key: 'withinEngland', label: 'More than 50% of role within England', expected: 'yes' },
+  { key: 'residentThreeYears', label: 'Resident in the UK/EEA for 3 years', expected: 'yes' },
+  { key: 'requiresWorkPermit', label: 'Requires a Work Permit', expected: 'no' },
+  { key: 'otherGovernmentTraining', label: 'Other government-funded training', expected: 'no' },
+  { key: 'contractedFullDuration', label: 'Contracted for full duration', expected: 'yes' },
+  { key: 'paidMinimumWage', label: 'Paid minimum wage', expected: 'yes' },
+  { key: 'permanentContract', label: 'Do you have a permanent contract?', expected: 'yes' },
+  { key: 'anotherApprenticeship', label: 'Another apprenticeship', expected: 'yes' },
+  { key: 'leedsBeckettPreviousStudent', label: 'Have you previously applied or studied with Leeds Beckett University?', expected: 'no' },
+];
 
 const DEFAULT_RULE_CONFIG = {
   ageCutoffDate: '2026-09-01',
   workingHoursReviewThreshold: 30,
   workingHoursFailThreshold: 48,
   countryOfResidence: 'UnitedKingdom',
+  nationality: 'UKNational',
+  countryOfBirth: 'UnitedKingdom',
+  yesNoAnswers: YES_NO_RULE_DEFINITIONS.reduce((answers, definition) => {
+    answers[definition.key] = definition.expected;
+    return answers;
+  }, {}),
 };
 
 const RULE_CONFIG_PATH = 'rules-config.json';
@@ -97,10 +121,15 @@ dropzone.addEventListener('dragleave', handleDragLeave);
 dropzone.addEventListener('drop', handleDrop);
 clearButton.addEventListener('click', resetView);
 configureRulesButton.addEventListener('click', (event) => {
-  event.preventDefault();
-  openRulesPanel();
+  renderYesNoRules();
+  syncRulesForm();
+  renderRulesSummary();
 });
-closeRulesButton.addEventListener('click', closeRulesPanel);
+closeRulesButton.addEventListener('click', () => {
+  if (window.location.hash === '#rulesPanel') {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+});
 rulesForm.addEventListener('submit', handleRulesSubmit);
 document.querySelector('#resetRulesButton').addEventListener('click', resetRulesToDefault);
 copySummaryButton.addEventListener('click', () => {
@@ -403,15 +432,11 @@ function resetView() {
 function openRulesPanel() {
   syncRulesForm();
   renderRulesSummary();
-  rulesPanel.hidden = false;
-  rulesPanel.classList.remove('hidden');
   rulesPanel.scrollIntoView({ block: 'start', behavior: 'smooth' });
   ageCutoffInput.focus();
 }
 
 function closeRulesPanel() {
-  rulesPanel.hidden = true;
-  rulesPanel.classList.add('hidden');
   configureRulesButton.focus();
 }
 
@@ -456,6 +481,9 @@ function applyRuleConfig(nextConfig) {
   ruleState.workingHoursReviewThreshold = nextConfig.workingHoursReviewThreshold;
   ruleState.workingHoursFailThreshold = nextConfig.workingHoursFailThreshold;
   ruleState.countryOfResidence = nextConfig.countryOfResidence;
+  ruleState.nationality = nextConfig.nationality;
+  ruleState.countryOfBirth = nextConfig.countryOfBirth;
+  ruleState.yesNoAnswers = { ...nextConfig.yesNoAnswers };
 }
 
 function normalizeRuleConfig(config) {
@@ -468,6 +496,16 @@ function normalizeRuleConfig(config) {
   const countryOfResidence = typeof source.countryOfResidence === 'string' && source.countryOfResidence.trim()
     ? source.countryOfResidence.trim()
     : DEFAULT_RULE_CONFIG.countryOfResidence;
+  const nationality = typeof source.nationality === 'string' && source.nationality.trim()
+    ? source.nationality.trim()
+    : DEFAULT_RULE_CONFIG.nationality;
+  const countryOfBirth = typeof source.countryOfBirth === 'string' && source.countryOfBirth.trim()
+    ? source.countryOfBirth.trim()
+    : DEFAULT_RULE_CONFIG.countryOfBirth;
+  const yesNoAnswers = YES_NO_RULE_DEFINITIONS.reduce((answers, definition) => {
+    answers[definition.key] = normalizeYesNoAnswer(source.yesNoAnswers?.[definition.key], definition.expected);
+    return answers;
+  }, {});
 
   return {
     ageCutoffDate,
@@ -478,10 +516,14 @@ function normalizeRuleConfig(config) {
       ? workingHoursFailThreshold
       : DEFAULT_RULE_CONFIG.workingHoursFailThreshold,
     countryOfResidence,
+    nationality,
+    countryOfBirth,
+    yesNoAnswers,
   };
 }
 
 function renderRulesPanel() {
+  renderYesNoRules();
   syncRulesForm();
   renderRulesSummary();
 }
@@ -491,6 +533,19 @@ function syncRulesForm() {
   workingHoursReviewInput.value = String(ruleState.workingHoursReviewThreshold);
   workingHoursFailInput.value = String(ruleState.workingHoursFailThreshold);
   countryOfResidenceInput.value = ruleState.countryOfResidence;
+  nationalityInput.value = ruleState.nationality;
+  countryOfBirthInput.value = ruleState.countryOfBirth;
+
+  if (yesNoRules) {
+    yesNoRules.querySelectorAll('[data-yes-no-key]').forEach((field) => {
+      const key = field.dataset.yesNoKey;
+      const select = field.querySelector('select');
+
+      if (select) {
+        select.value = normalizeYesNoAnswer(ruleState.yesNoAnswers?.[key], DEFAULT_RULE_CONFIG.yesNoAnswers[key]);
+      }
+    });
+  }
 }
 
 function readRuleConfigFromForm() {
@@ -498,6 +553,9 @@ function readRuleConfigFromForm() {
   const workingHoursReviewThreshold = Number(workingHoursReviewInput.value);
   const workingHoursFailThreshold = Number(workingHoursFailInput.value);
   const countryOfResidence = countryOfResidenceInput.value.trim();
+  const nationality = nationalityInput.value.trim();
+  const countryOfBirth = countryOfBirthInput.value.trim();
+  const yesNoAnswers = {};
 
   if (!ageCutoffDate) {
     throw new Error('Age cutoff date is required.');
@@ -511,11 +569,27 @@ function readRuleConfigFromForm() {
     throw new Error('Expected country of residence is required.');
   }
 
+  if (!nationality) {
+    throw new Error('Nationality is required.');
+  }
+
+  if (!countryOfBirth) {
+    throw new Error('Country of birth is required.');
+  }
+
+  YES_NO_RULE_DEFINITIONS.forEach((definition) => {
+    const select = yesNoRules?.querySelector(`[data-yes-no-key="${definition.key}"] select`);
+    yesNoAnswers[definition.key] = normalizeYesNoAnswer(select?.value, definition.expected);
+  });
+
   return {
     ageCutoffDate,
     workingHoursReviewThreshold,
     workingHoursFailThreshold,
     countryOfResidence,
+    nationality,
+    countryOfBirth,
+    yesNoAnswers,
   };
 }
 
@@ -541,9 +615,19 @@ function renderRulesSummary() {
       note: 'Country matching is normalized before comparison.',
     },
     {
-      label: 'Fixed checks',
-      value: 'Current yes/no mappings stay in place',
-      note: 'This first pass exposes the thresholds that are already configurable in practice.',
+      label: 'Nationality',
+      value: ruleState.nationality,
+      note: 'Nationality is compared as a normalized country value.',
+    },
+    {
+      label: 'Country of birth',
+      value: ruleState.countryOfBirth,
+      note: 'Country of birth is compared as a normalized country value.',
+    },
+    {
+      label: 'Yes/No presets',
+      value: `${YES_NO_RULE_DEFINITIONS.length} editable fields`,
+      note: 'Each preset keeps the eligible answer ready in the shared config.',
     },
     {
       label: 'Shared source',
@@ -563,6 +647,22 @@ function renderRulesSummary() {
       `,
     )
     .join('');
+}
+
+function renderYesNoRules() {
+  if (!yesNoRules) {
+    return;
+  }
+
+  yesNoRules.innerHTML = YES_NO_RULE_DEFINITIONS.map((definition) => `
+    <div class="rule-field rule-field--inline" data-yes-no-key="${definition.key}">
+      <label for="${definition.key}Input">${escapeHtml(definition.label)}</label>
+      <select id="${definition.key}Input">
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </div>
+  `).join('');
 }
 
 function formatRuleDate(value) {

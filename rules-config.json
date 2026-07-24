@@ -2,5 +2,21 @@
   "ageCutoffDate": "2026-09-01",
   "workingHoursReviewThreshold": 30,
   "workingHoursFailThreshold": 48,
-  "countryOfResidence": "UnitedKingdom"
+  "countryOfResidence": "UnitedKingdom",
+  "nationality": "UKNational",
+  "countryOfBirth": "UnitedKingdom",
+  "yesNoAnswers": {
+    "previousName": "no",
+    "inEmployment": "yes",
+    "ukEeaNational": "yes",
+    "withinEngland": "yes",
+    "residentThreeYears": "yes",
+    "requiresWorkPermit": "no",
+    "otherGovernmentTraining": "no",
+    "contractedFullDuration": "yes",
+    "paidMinimumWage": "yes",
+    "permanentContract": "yes",
+    "anotherApprenticeship": "yes",
+    "leedsBeckettPreviousStudent": "no"
+  }
 }

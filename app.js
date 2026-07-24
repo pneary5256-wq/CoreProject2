@@ -7,7 +7,6 @@ const fileMeta = document.querySelector('#fileMeta');
 const totalApplicantsCount = document.querySelector('#totalApplicantsCount');
 const eligibleCount = document.querySelector('#eligibleCount');
 const ineligibleCount = document.querySelector('#ineligibleCount');
-const reviewCount = document.querySelector('#reviewCount');
 const missingDataCount = document.querySelector('#missingDataCount');
 const applicantList = document.querySelector('#applicantList');
 const applicantDetails = document.querySelector('#applicantDetails');
@@ -423,7 +422,6 @@ function resetView() {
   totalApplicantsCount.textContent = '0';
   eligibleCount.textContent = '0';
   ineligibleCount.textContent = '0';
-  reviewCount.textContent = '0';
   missingDataCount.textContent = '0';
   applicantList.innerHTML = '';
   applicantDetails.innerHTML = '<div class="empty-state-panel">Select an applicant to inspect the criteria breakdown.</div>';
@@ -741,7 +739,6 @@ function renderDashboard(applicants) {
       total: 0,
       pass: 0,
       fail: 0,
-      review: 0,
       missing: 0,
     },
   );
@@ -749,7 +746,6 @@ function renderDashboard(applicants) {
   totalApplicantsCount.textContent = String(metrics.total);
   eligibleCount.textContent = String(metrics.pass);
   ineligibleCount.textContent = String(metrics.fail);
-  reviewCount.textContent = String(metrics.review);
   missingDataCount.textContent = String(metrics.missing);
 
   summaryOutput.value = '';
@@ -1014,14 +1010,13 @@ function evaluateApplicant(headers, row, rowIndex) {
 
   const hasMissing = criteria.some((criterion) => criterion.status === 'missing');
   const hasFail = criteria.some((criterion) => criterion.status === 'fail');
-  const hasReview = criteria.some((criterion) => criterion.status === 'review');
-  const statusKey = hasMissing ? 'missing' : hasFail ? 'fail' : hasReview ? 'review' : 'pass';
+  const statusKey = hasMissing ? 'missing' : hasFail ? 'fail' : 'pass';
 
   return {
     name: applicantName,
     subTitle: `Row ${rowIndex + 2}`,
     statusKey,
-    statusLabel: statusKey === 'missing' ? 'MISSING DATA' : statusKey === 'fail' ? 'FAIL' : statusKey === 'review' ? 'REVIEW' : 'PASS',
+    statusLabel: statusKey === 'missing' ? 'MISSING DATA' : statusKey === 'fail' ? 'FAIL' : 'PASS',
     criteria,
   };
 }

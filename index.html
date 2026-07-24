@@ -91,6 +91,10 @@
                 <h3 id="yes-no-presets-title">Yes/No presets</h3>
                 <p>Preset each rule to the answer that keeps the applicant eligible.</p>
               </div>
+              <p class="rules-group__helper">
+                Where a field still needs review, the summary output is based on the checks below rather than a separate
+                Review Required total.
+              </p>
               <div id="yesNoRules" class="rules-group__grid"></div>
             </section>
 
@@ -112,7 +116,7 @@
         </div>
       </section>
 
-      <section class="metrics-grid metrics-grid--five" aria-label="Eligibility metrics">
+      <section class="metrics-grid metrics-grid--four" aria-label="Eligibility metrics">
         <article class="metric-card metric-card--accent">
           <span class="metric-label">Total Applicants</span>
           <strong id="totalApplicantsCount">0</strong>
@@ -124,10 +128,6 @@
         <article class="metric-card">
           <span class="metric-label">Ineligible</span>
           <strong id="ineligibleCount">0</strong>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Review Required</span>
-          <strong id="reviewCount">0</strong>
         </article>
         <article class="metric-card">
           <span class="metric-label">Missing Data</span>

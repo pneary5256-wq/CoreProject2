@@ -275,15 +275,15 @@ h2 {
   flex-wrap: wrap;
 }
 
-.metrics-grid.metrics-grid--five,
+.metrics-grid.metrics-grid--four,
 .dashboard,
 .applicant-list,
 .criteria-grid {
   display: grid;
 }
 
-.metrics-grid.metrics-grid--five {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.metrics-grid.metrics-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   margin-top: 24px;
   gap: 16px;
@@ -649,6 +649,15 @@ h2 {
 .rules-group__header p {
   margin: 6px 0 0;
   color: var(--muted);
+}
+
+.rules-group__helper {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #faf7fd;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .rules-group__grid {

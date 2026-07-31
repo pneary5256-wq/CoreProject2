@@ -8,8 +8,8 @@
       name="description"
       content="Upload applicant data, review eligibility metrics, and inspect row-by-row rule outcomes."
     />
-    <link rel="stylesheet" href="styles.css?v=20260724c" />
-    <script type="module" src="app.js?v=20260724c" defer></script>
+    <link rel="stylesheet" href="styles.css?v=20260731a" />
+    <script type="module" src="app.js?v=20260731a" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -145,6 +145,20 @@
             <div id="fileMeta" class="file-meta">Waiting for upload</div>
           </div>
 
+          <div class="applicant-filters" aria-label="Applicant list filters">
+            <div class="rule-field applicant-filters__field">
+              <label for="applicantSearchInput">Search by name</label>
+              <input id="applicantSearchInput" type="search" placeholder="Type an applicant name" />
+            </div>
+
+            <div class="rule-field applicant-filters__field">
+              <label for="applicantDeadlineSelect">Onboarding deadline</label>
+              <select id="applicantDeadlineSelect">
+                <option value="all">All onboarding deadlines</option>
+              </select>
+            </div>
+          </div>
+
           <div id="applicantList" class="applicant-list" role="list" aria-label="Applicants"></div>
         </article>
 
@@ -183,7 +197,7 @@
           class="summary-output"
           rows="5"
           readonly
-          placeholder="Summary output will appear here in a later step."
+          placeholder="Summary will appear when the applicant has met eligibility criteria"
         ></textarea>
       </section>
     </main>

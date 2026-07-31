@@ -331,6 +331,26 @@ h2 {
   scrollbar-width: thin;
 }
 
+.applicant-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.applicant-filters__field {
+  align-items: flex-start;
+}
+
+.applicant-filters__field label {
+  min-width: 0;
+}
+
+.applicant-filters__field input,
+.applicant-filters__field select {
+  width: 100%;
+}
+
 .applicant-list {
   gap: 12px;
 }
@@ -394,6 +414,18 @@ h2 {
 
 .applicant-item__name {
   font-weight: 700;
+}
+
+.applicant-item__content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.applicant-item__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .status-pill {
@@ -949,6 +981,10 @@ button {
   }
 
   .rule-field--split {
+    grid-template-columns: 1fr;
+  }
+
+  .applicant-filters {
     grid-template-columns: 1fr;
   }
 

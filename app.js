@@ -9,6 +9,8 @@ const eligibleCount = document.querySelector('#eligibleCount');
 const ineligibleCount = document.querySelector('#ineligibleCount');
 const missingDataCount = document.querySelector('#missingDataCount');
 const applicantList = document.querySelector('#applicantList');
+const applicantSearchInput = document.querySelector('#applicantSearchInput');
+const applicantDeadlineSelect = document.querySelector('#applicantDeadlineSelect');
 const applicantDetails = document.querySelector('#applicantDetails');
 const summaryOutput = document.querySelector('#summaryOutput');
 const configureRulesButton = document.querySelector('#configureRulesButton');
@@ -64,6 +66,11 @@ let sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
 const appState = {
   applicants: [],
   selectedApplicantIndex: -1,
+  filters: {
+    searchTerm: '',
+    onboardingDeadline: 'all',
+  },
+  onboardingDeadlines: [],
 };
 
 // Validation constants
@@ -122,6 +129,8 @@ dropzone.addEventListener('dragover', handleDragOver);
 dropzone.addEventListener('dragleave', handleDragLeave);
 dropzone.addEventListener('drop', handleDrop);
 clearButton.addEventListener('click', resetView);
+applicantSearchInput.addEventListener('input', handleApplicantSearchInput);
+applicantDeadlineSelect.addEventListener('change', handleApplicantDeadlineChange);
 configureRulesButton.addEventListener('click', (event) => {
   renderYesNoRules();
   syncRulesForm();
@@ -342,8 +351,14 @@ async function processFile(file) {
     const applicants = dataRows.map((row, index) => evaluateApplicant(headers, row, index));
     appState.applicants = applicants;
     appState.selectedApplicantIndex = -1;
+    appState.filters = {
+      searchTerm: '',
+      onboardingDeadline: 'all',
+    };
+    appState.onboardingDeadlines = buildOnboardingDeadlineOptions(headers, dataRows);
 
     fileMeta.textContent = `${file.name} · ${parsed.sourceLabel}`;
+    syncApplicantFilters();
     renderDashboard(applicants);
 
     setMessage(`Loaded ${file.name} successfully.`);
@@ -430,6 +445,12 @@ function resetView() {
   setMessage('No file selected yet.');
   appState.applicants = [];
   appState.selectedApplicantIndex = -1;
+  appState.filters = {
+    searchTerm: '',
+    onboardingDeadline: 'all',
+  };
+  appState.onboardingDeadlines = [];
+  syncApplicantFilters();
 }
 
 function openRulesPanel() {
@@ -852,25 +873,38 @@ function renderDashboard(applicants) {
 
   summaryOutput.value = '';
   copySummaryButton.disabled = true;
+  syncApplicantFilters();
   renderApplicantList();
   renderApplicantDetails();
 }
 
 function renderApplicantList() {
+  const filteredApplicants = getFilteredApplicants();
+
   if (appState.applicants.length === 0) {
     applicantList.innerHTML = '<div class="empty-state-panel">Upload a file to see applicants listed here.</div>';
     return;
   }
 
-  applicantList.innerHTML = appState.applicants
+  ensureVisibleApplicantSelection(filteredApplicants);
+
+  if (filteredApplicants.length === 0) {
+    applicantList.innerHTML = '<div class="empty-state-panel">No applicants match the current search and deadline filters.</div>';
+    return;
+  }
+
+  applicantList.innerHTML = filteredApplicants
     .map(
-      (applicant, index) => `
+      ({ applicant, index }) => `
         <button
           type="button"
           class="applicant-item applicant-item--${applicant.statusKey}${index === appState.selectedApplicantIndex ? ' is-selected' : ''}"
           data-applicant-index="${index}"
         >
-          <span class="applicant-item__name">${escapeHtml(applicant.name)}</span>
+          <span class="applicant-item__content">
+            <span class="applicant-item__name">${escapeHtml(applicant.name)}</span>
+            <span class="applicant-item__meta">Onboarding deadline: ${escapeHtml(applicant.onboardingDeadline || 'Not provided')}</span>
+          </span>
           <span class="status-pill status-pill--${applicant.statusKey}">${escapeHtml(applicant.statusLabel)}</span>
         </button>
       `,
@@ -917,6 +951,116 @@ function renderApplicantDetails() {
   `;
 
   renderSummaryOutput(applicant);
+}
+
+function handleApplicantSearchInput(event) {
+  appState.filters.searchTerm = event.target.value;
+  renderDashboard(appState.applicants);
+}
+
+function handleApplicantDeadlineChange(event) {
+  appState.filters.onboardingDeadline = event.target.value;
+  renderDashboard(appState.applicants);
+}
+
+function syncApplicantFilters() {
+  if (applicantSearchInput) {
+    applicantSearchInput.value = appState.filters.searchTerm;
+  }
+
+  if (applicantDeadlineSelect) {
+    applicantDeadlineSelect.innerHTML = [
+      '<option value="all">All onboarding deadlines</option>',
+      ...appState.onboardingDeadlines.map((deadline) => `
+        <option value="${escapeHtmlAttribute(deadline)}">${escapeHtml(deadline)}</option>
+      `),
+    ].join('');
+    applicantDeadlineSelect.value = appState.filters.onboardingDeadline;
+  }
+}
+
+function buildOnboardingDeadlineOptions(headers, rows) {
+  const uniqueDeadlines = new Set();
+
+  rows.forEach((row) => {
+    const deadline = getSpreadsheetValue(headers, row, 'Onboarding Deadline', 4);
+
+    if (deadline) {
+      uniqueDeadlines.add(deadline);
+    }
+  });
+
+  return Array.from(uniqueDeadlines).sort((left, right) => {
+    const leftDate = parseFlexibleDate(left);
+    const rightDate = parseFlexibleDate(right);
+
+    if (leftDate && rightDate) {
+      return leftDate.getTime() - rightDate.getTime();
+    }
+
+    if (leftDate) {
+      return -1;
+    }
+
+    if (rightDate) {
+      return 1;
+    }
+
+    return left.localeCompare(right);
+  });
+}
+
+function getFilteredApplicants() {
+  const searchTerm = normalizeSearchTerm(appState.filters.searchTerm);
+  const selectedDeadline = appState.filters.onboardingDeadline;
+
+  return appState.applicants
+    .map((applicant, index) => ({ applicant, index }))
+    .filter(({ applicant }) => {
+      const matchesSearch = !searchTerm || normalizeSearchTerm(applicant.name).includes(searchTerm);
+      const matchesDeadline =
+        selectedDeadline === 'all' || String(applicant.onboardingDeadline ?? '').trim() === selectedDeadline;
+
+      return matchesSearch && matchesDeadline;
+    });
+}
+
+function ensureVisibleApplicantSelection(filteredApplicants) {
+  if (filteredApplicants.length === 0) {
+    appState.selectedApplicantIndex = -1;
+    return;
+  }
+
+  if (filteredApplicants.some(({ index }) => index === appState.selectedApplicantIndex)) {
+    return;
+  }
+
+  appState.selectedApplicantIndex = filteredApplicants[0].index;
+}
+
+function escapeHtmlAttribute(value) {
+  return escapeHtml(value).replaceAll('"', '&quot;');
+}
+
+function normalizeSearchTerm(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getSpreadsheetValue(headers, row, headerName, fallbackIndex = -1) {
+  const headerIndex = headers.findIndex((header) => header.toLowerCase() === headerName.toLowerCase());
+
+  if (headerIndex !== -1) {
+    return String(row[headerIndex] ?? '').trim();
+  }
+
+  if (fallbackIndex >= 0) {
+    return String(row[fallbackIndex] ?? '').trim();
+  }
+
+  return '';
 }
 
 function evaluateApplicant(headers, row, rowIndex) {
@@ -1119,12 +1263,14 @@ function evaluateApplicant(headers, row, rowIndex) {
   const hasMissing = criteria.some((criterion) => criterion.status === 'missing');
   const hasFail = criteria.some((criterion) => criterion.status === 'fail');
   const statusKey = hasMissing ? 'missing' : hasFail ? 'fail' : 'pass';
+  const onboardingDeadline = getSpreadsheetValue(headers, row, 'Onboarding Deadline', 4);
 
   return {
     name: applicantName,
     subTitle: `Row ${rowIndex + 2}`,
     statusKey,
     statusLabel: statusKey === 'missing' ? 'MISSING DATA' : statusKey === 'fail' ? 'FAIL' : 'PASS',
+    onboardingDeadline,
     summaryInputs: {
       firstName,
       lastName,

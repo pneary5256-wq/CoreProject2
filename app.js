@@ -16,7 +16,6 @@ const summaryOutput = document.querySelector('#summaryOutput');
 const configureRulesButton = document.querySelector('#configureRulesButton');
 const copySummaryButton = document.querySelector('#copySummaryButton');
 const clearButton = document.querySelector('#clearButton');
-const rulesPanel = document.querySelector('#rulesPanel');
 const closeRulesButton = document.querySelector('#closeRulesButton');
 const rulesForm = document.querySelector('#rulesForm');
 const saveRulesButton = document.querySelector('#saveRulesButton');
@@ -131,7 +130,7 @@ dropzone.addEventListener('drop', handleDrop);
 clearButton.addEventListener('click', resetView);
 applicantSearchInput.addEventListener('input', handleApplicantSearchInput);
 applicantDeadlineSelect.addEventListener('change', handleApplicantDeadlineChange);
-configureRulesButton.addEventListener('click', (event) => {
+configureRulesButton.addEventListener('click', () => {
   renderYesNoRules();
   syncRulesForm();
   renderRulesSummary();
@@ -454,13 +453,6 @@ function resetView() {
   };
   appState.onboardingDeadlines = [];
   syncApplicantFilters();
-}
-
-function openRulesPanel() {
-  syncRulesForm();
-  renderRulesSummary();
-  rulesPanel.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  ageCutoffInput.focus();
 }
 
 function closeRulesPanel() {

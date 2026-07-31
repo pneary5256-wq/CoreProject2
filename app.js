@@ -169,6 +169,7 @@ async function loadSharedRuleConfig() {
   } catch (error) {
     console.warn(error);
     sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
+    setMessage('Using built-in rule defaults because rules-config.json could not be loaded.', true);
   }
 
   applyRuleConfig(sharedRuleConfig);
@@ -214,7 +215,9 @@ function validateHeaders(headers) {
   );
 
   if (unexpectedHeaders.length > 0) {
-    console.warn(`Warning: Unexpected columns found: ${unexpectedHeaders.join(', ')}`);
+    const warningText = `Unexpected columns found: ${unexpectedHeaders.join(', ')}`;
+    console.warn(warningText);
+    setMessage(`${warningText}. Some fields may be unavailable.`, true);
   }
 }
 
@@ -989,6 +992,10 @@ function buildOnboardingDeadlineOptions(headers, rows) {
       uniqueDeadlines.add(deadline);
     }
   });
+
+  if (uniqueDeadlines.size === 0) {
+    setMessage('No onboarding deadlines were found in the uploaded file. The deadline filter will remain empty.', true);
+  }
 
   return Array.from(uniqueDeadlines).sort((left, right) => {
     const leftDate = parseFlexibleDate(left);

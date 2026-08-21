@@ -1048,6 +1048,15 @@ function normalizeSearchTerm(value) {
     .trim();
 }
 
+function isValidNationalInsuranceNumber(value) {
+  if (value == null) {
+    return false;
+  }
+
+  const normalized = String(value).replace(/\s+/g, '').toUpperCase();
+  return /^[A-Z]{2}\d{6}[A-Z]$/.test(normalized);
+}
+
 function getSpreadsheetValue(headers, row, headerName, fallbackIndex = -1) {
   const headerIndex = headers.findIndex((header) => header.toLowerCase() === headerName.toLowerCase());
 
@@ -1255,8 +1264,10 @@ function evaluateApplicant(headers, row, rowIndex) {
   const niNumber = getValue('National insurance number');
   if (!niNumber) {
     addCriterion('National insurance number', 'Not provided', 'missing', 'National insurance number is required.');
+  } else if (!isValidNationalInsuranceNumber(niNumber)) {
+    addCriterion('National insurance number', niNumber, 'fail', 'National insurance number must be 2 letters, 6 numbers, and a final letter.');
   } else {
-    addCriterion('National insurance number', niNumber, 'pass', 'National insurance number is present.');
+    addCriterion('National insurance number', niNumber, 'pass', 'National insurance number format is valid.');
   }
 
   const hasMissing = criteria.some((criterion) => criterion.status === 'missing');

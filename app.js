@@ -30,6 +30,8 @@ const countryOfBirthInput = document.querySelector('#countryOfBirthInput');
 const rulesSummary = document.querySelector('#rulesSummary');
 const yesNoRules = document.querySelector('#yesNoRules');
 
+// Core rule definitions for the funding checks that can be toggled by the user.
+// Each item maps to a yes/no answer that must match the expected value for an applicant to pass.
 const YES_NO_RULE_DEFINITIONS = [
   { key: 'previousName', label: 'Have you used a previous name?', expected: 'no' },
   { key: 'inEmployment', label: 'In employment, including self-employment', expected: 'yes' },
@@ -45,6 +47,7 @@ const YES_NO_RULE_DEFINITIONS = [
   { key: 'leedsBeckettPreviousStudent', label: 'Have you previously applied or studied with Leeds Beckett University?', expected: 'no' },
 ];
 
+// Shared defaults used when the app starts, or when the user resets the rules.
 const DEFAULT_RULE_CONFIG = {
   ageCutoffDate: '2026-09-01',
   workingHoursReviewThreshold: 30,
@@ -62,6 +65,7 @@ const RULE_CONFIG_PATH = 'rules-config.json';
 
 const ruleState = { ...DEFAULT_RULE_CONFIG };
 let sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
+// Runtime application state for the currently loaded file and currently selected applicant.
 const appState = {
   applicants: [],
   selectedApplicantIndex: -1,
@@ -123,6 +127,7 @@ const EXPECTED_HEADERS = new Set([
   'National insurance number',
 ]);
 
+// Wire up file upload, filtering, and rule panel behaviour.
 csvInput.addEventListener('change', handleSelection);
 dropzone.addEventListener('dragover', handleDragOver);
 dropzone.addEventListener('dragleave', handleDragLeave);
@@ -149,12 +154,14 @@ copySummaryButton.addEventListener('click', () => {
 applicantList.addEventListener('click', handleApplicantListClick);
 void initApp();
 
+// Start-up flow: load shared settings, build the rule UI, and reset the visible dashboard state.
 async function initApp() {
   await loadSharedRuleConfig();
   renderRulesPanel();
   resetView();
 }
 
+// Load the shared rule file if available; otherwise fall back to built-in defaults.
 async function loadSharedRuleConfig() {
   try {
     const response = await fetch(RULE_CONFIG_PATH, { cache: 'no-store' });
@@ -166,7 +173,6 @@ async function loadSharedRuleConfig() {
     const config = await response.json();
     sharedRuleConfig = normalizeRuleConfig(config);
   } catch (error) {
-    console.warn(error);
     sharedRuleConfig = { ...DEFAULT_RULE_CONFIG };
     setMessage('Using built-in rule defaults because rules-config.json could not be loaded.', true);
   }
@@ -193,7 +199,7 @@ function handleDrop(event) {
   }
 }
 
-// Validation functions
+// File and content validation helpers used before any applicant evaluation runs.
 function validateFileSize(file) {
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds maximum limit of ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
@@ -215,7 +221,6 @@ function validateHeaders(headers) {
 
   if (unexpectedHeaders.length > 0) {
     const warningText = `Unexpected columns found: ${unexpectedHeaders.join(', ')}`;
-    console.warn(warningText);
     setMessage(`${warningText}. Some fields may be unavailable.`, true);
   }
 }
@@ -370,6 +375,7 @@ async function processFile(file) {
   }
 }
 
+// Parse CSV/text files and Excel workbooks into rows that can be checked against the rule set.
 async function parseFile(file) {
   if (isWorkbookFile(file)) {
     return parseWorkbook(file);
@@ -432,6 +438,7 @@ async function assertSupportedTextFile(file) {
   }
 }
 
+// Reset the dashboard to its default empty state after a failed upload or manual clear.
 function resetView() {
   csvInput.value = '';
   clearButton.disabled = true;
@@ -459,6 +466,7 @@ function closeRulesPanel() {
   configureRulesButton.focus();
 }
 
+// Rules editing flow: validate the form, apply the custom settings, and re-render the dashboard.
 function handleRulesSubmit(event) {
   event.preventDefault();
 
@@ -715,6 +723,7 @@ function renderYesNoRules() {
   `).join('');
 }
 
+// Build the final summary text for a passing applicant and push it into the output panel.
 function renderSummaryOutput(applicant) {
   const statement = buildEligibilityStatement(applicant);
   summaryOutput.value = statement;

@@ -620,6 +620,19 @@ h2 {
   line-height: 1.55;
 }
 
+.section-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.93rem;
+}
+
+.section-note--metrics {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
 .rules-form {
   display: grid;
   gap: 12px;

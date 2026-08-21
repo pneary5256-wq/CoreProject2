@@ -46,6 +46,10 @@
               Shared defaults are loaded from <strong>rules-config.json</strong>. Update that file and republish to
               change the rules for everyone.
             </p>
+            <p class="section-note">
+              Use this panel to set the age threshold, government rules, and the expected answers for each yes/no
+              eligibility check before reviewing applicants.
+            </p>
           </div>
           <a id="closeRulesButton" class="ghost-button" href="#">Close</a>
         </div>
@@ -117,6 +121,10 @@
       </section>
 
       <section class="metrics-grid metrics-grid--four" aria-label="Eligibility metrics">
+        <p class="section-note section-note--metrics">
+          These totals show how many applicants are in the uploaded file and how many are eligible, ineligible, or
+          missing required information.
+        </p>
         <article class="metric-card metric-card--accent">
           <span class="metric-label">Total Applicants</span>
           <strong id="totalApplicantsCount">0</strong>
@@ -144,6 +152,10 @@
             </div>
             <div id="fileMeta" class="file-meta">Waiting for upload</div>
           </div>
+          <p class="section-note">
+            This list shows every loaded applicant. Search by name or filter by onboarding deadline to narrow down the
+            records you need to review.
+          </p>
 
           <div class="applicant-filters" aria-label="Applicant list filters">
             <div class="rule-field applicant-filters__field">
@@ -169,6 +181,10 @@
               <h2 id="details-title">Applicant details</h2>
             </div>
           </div>
+          <p class="section-note">
+            This panel shows the rule-by-rule check for the selected applicant, including pass, fail, review, and
+            missing-data outcomes.
+          </p>
 
           <div id="applicantDetails" class="applicant-details empty-state-panel">
             Select an applicant to inspect the criteria breakdown.
@@ -186,6 +202,11 @@
             Copy
           </button>
         </div>
+
+        <p class="section-note">
+          This summary is the final ready-to-copy statement for the selected applicant, based on the relevant eligibility
+          checks that were completed.
+        </p>
 
         <p class="summary-panel__note">
           The summary output is based on the following being checked where relevant: right to work/residency,

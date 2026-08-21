@@ -990,11 +990,11 @@ function buildOnboardingDeadlineOptions(headers, rows) {
   }
 
   return Array.from(uniqueDeadlines).sort((left, right) => {
-    const leftDate = parseFlexibleDate(left);
-    const rightDate = parseFlexibleDate(right);
+    const leftDate = parseSortableDeadline(left);
+    const rightDate = parseSortableDeadline(right);
 
     if (leftDate && rightDate) {
-      return leftDate.getTime() - rightDate.getTime();
+      return leftDate.year - rightDate.year || leftDate.month - rightDate.month || leftDate.day - rightDate.day;
     }
 
     if (leftDate) {
@@ -1439,7 +1439,74 @@ function parseFlexibleDate(value) {
     return buildDate(year, first, second);
   }
 
+  const ordinalMatch = text.match(/^(\d{1,2})\s*(?:st|nd|rd|th)?\s*([A-Za-z]+)(?:\s+\d{4})?$/i);
+  if (ordinalMatch) {
+    const day = Number(ordinalMatch[1]);
+    const month = getMonthNumberFromName(ordinalMatch[2]);
+
+    if (!Number.isInteger(day) || !Number.isInteger(month)) {
+      return null;
+    }
+
+    const yearMatch = text.match(/(\d{4})$/);
+    const year = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+    const date = new Date(year, month - 1, day);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
   return null;
+}
+
+function parseSortableDeadline(value) {
+  const text = String(value ?? '').trim();
+
+  if (!text) {
+    return null;
+  }
+
+  const date = parseFlexibleDate(text);
+  if (date) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+    };
+  }
+
+  if (/^\d{1,2}\/\d{1,2}$/.test(text)) {
+    const [first, second] = text.split('/').map(Number);
+    const day = first;
+    const month = second;
+
+    return {
+      year: new Date().getFullYear(),
+      month,
+      day,
+    };
+  }
+
+  return null;
+}
+
+function getMonthNumberFromName(value) {
+  const monthIndex = new Map([
+    ['january', 1], ['jan', 1],
+    ['february', 2], ['feb', 2],
+    ['march', 3], ['mar', 3],
+    ['april', 4], ['apr', 4],
+    ['may', 5],
+    ['june', 6], ['jun', 6],
+    ['july', 7], ['jul', 7],
+    ['august', 8], ['aug', 8],
+    ['september', 9], ['sep', 9], ['sept', 9],
+    ['october', 10], ['oct', 10],
+    ['november', 11], ['nov', 11],
+    ['december', 12], ['dec', 12],
+  ]);
+
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return monthIndex.get(normalized) ?? null;
 }
 
 function normalizeYearPart(yearPart) {

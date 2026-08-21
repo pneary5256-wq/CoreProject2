@@ -533,11 +533,29 @@ h2 {
   margin: 10px 0 0;
   line-height: 1.6;
   color: var(--muted);
+  max-height: 8rem;
+  overflow: auto;
+  padding-right: 6px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
 }
 
 .criterion-card__value {
   color: #000000;
   font-weight: 600;
+}
+
+.criterion-card__value::-webkit-scrollbar,
+.criterion-card__note::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.criterion-card__value::-webkit-scrollbar-thumb,
+.criterion-card__note::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(117, 59, 189, 0.35);
 }
 
 .empty-state-panel {

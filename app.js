@@ -50,7 +50,7 @@ const DEFAULT_RULE_CONFIG = {
   workingHoursReviewThreshold: 30,
   workingHoursFailThreshold: 48,
   countryOfResidence: 'UnitedKingdom',
-  nationality: 'UKNational',
+  nationality: 'UnitedKingdom',
   countryOfBirth: 'UnitedKingdom',
   yesNoAnswers: YES_NO_RULE_DEFINITIONS.reduce((answers, definition) => {
     answers[definition.key] = definition.expected;
@@ -1397,10 +1397,16 @@ function normalizeYesNoAnswer(value, fallback = 'yes') {
 }
 
 function normalizeCountry(value) {
-  return String(value ?? '')
+  const normalized = String(value ?? '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z]/g, '');
+
+  if (normalized === 'uknational' || normalized === 'unitedkingdom' || normalized === 'uk') {
+    return 'unitedkingdom';
+  }
+
+  return normalized;
 }
 
 function parseFlexibleDate(value) {

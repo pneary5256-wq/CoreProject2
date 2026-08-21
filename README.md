@@ -1,15 +1,13 @@
 # CoreProject2
 
-A lightweight CSV upload experience for inspecting report exports from the Aptem system.
+Applicant Eligibility Analysis Tool for reviewing Aptem applicant exports. Upload a CSV or spreadsheet to see eligibility results, summary metrics, applicant details, and configurable rule checks.
 
-## What it does
+## Run
 
-- Upload a CSV, TSV, or semicolon-delimited file.
-- Auto-detect the delimiter.
-- Parse quoted fields and multiline values.
-- Preview the first 200 rows in a table.
-- Show basic file and dataset summary metrics.
+From this folder, start a local server:
 
-## How to use
+```bash
+python3 -m http.server 8000
+```
 
-Open `index.html` in a browser, or serve the folder with any static file server. Then drag and drop a data export into the upload area or click to browse for a file.
+Open `http://localhost:8000` in your browser, then upload the test data set from the `evidence pack`. Supported formats are `.csv`, `.tsv`, `.xls`, `.xlsx`, `.xlsm`, and `.ods`.
